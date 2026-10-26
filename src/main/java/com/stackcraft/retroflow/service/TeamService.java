@@ -8,22 +8,28 @@ import com.stackcraft.retroflow.repository.TeamRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
+import static com.stackcraft.retroflow.service.ServiceValidation.requireText;
 
 /**
  * Creates and retrieves teams.
- *
- * <p>STUB (Block 1): signatures and contracts only. The bodies are
- * implemented in Block 2; see decisions.md and test-matrix.md.
  */
 @Service
 @Transactional(readOnly = true)
 public class TeamService {
 
-    private final TeamRepository teamRepository;
+    private static final String NEW_TEAM = "Team new";
 
-    public TeamService(TeamRepository teamRepository) {
+    private final TeamRepository teamRepository;
+    private final EntityLookup lookup;
+
+    public TeamService(TeamRepository teamRepository, EntityLookup lookup) {
         this.teamRepository = teamRepository;
+        this.lookup = lookup;
     }
 
     /**
@@ -32,12 +38,18 @@ public class TeamService {
      * @param name    team name, unique ignoring case
      * @param members member names, at least one, no duplicates ignoring case
      * @return the saved team
-     * @throws InvalidInputException if there are no members or a member name is duplicated
+     * @throws InvalidInputException if the name is blank or too long, there are no members,
+     *                               a member name is blank or too long, or a member is listed twice
      * @throws RetroflowException    if a team with the same name already exists
      */
     @Transactional
     public Team createTeam(String name, List<String> members) {
-        throw new UnsupportedOperationException("TeamService.createTeam is not implemented yet");
+        String teamName = requireText(NEW_TEAM, "name", name, Team.MAX_NAME_LENGTH);
+        List<String> memberNames = requireMembers(members);
+        if (teamRepository.existsByNameIgnoreCase(teamName)) {
+            throw new RetroflowException(NEW_TEAM + ": a team named '" + teamName + "' already exists");
+        }
+        return teamRepository.save(new Team(teamName, memberNames));
     }
 
     /**
@@ -46,14 +58,30 @@ public class TeamService {
      * @throws NotFoundException if no team has this id
      */
     public Team getTeam(Long teamId) {
-        throw new UnsupportedOperationException("TeamService.getTeam is not implemented yet");
+        return lookup.team(teamId);
     }
 
     /**
      * @return all teams, ordered by name
      */
     public List<Team> getAllTeams() {
-        throw new UnsupportedOperationException("TeamService.getAllTeams is not implemented yet");
+        return teamRepository.findAllByOrderByNameAsc();
+    }
+
+    private static List<String> requireMembers(List<String> members) {
+        if (members == null || members.isEmpty()) {
+            throw new InvalidInputException(NEW_TEAM + ": members must not be empty");
+        }
+        List<String> names = members.stream()
+                .map(member -> requireText(NEW_TEAM, "member name", member, Team.MAX_NAME_LENGTH))
+                .toList();
+        Set<String> seen = new HashSet<>();
+        for (String memberName : names) {
+            if (!seen.add(memberName.toLowerCase(Locale.ROOT))) {
+                throw new InvalidInputException(NEW_TEAM + ": member '" + memberName + "' is listed more than once");
+            }
+        }
+        return names;
     }
 
 }
