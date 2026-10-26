@@ -383,3 +383,49 @@ back. Afterwards git status must show no change in src/main.
 - `git status src/main` was empty afterwards.
 
 **Verdict:** worked. We checked the `pom.xml` dependency ourselves too.
+
+---
+
+## Bring it together (both pairs)
+
+**Prompt**
+
+```
+Merge block2-service and block2-web into block2 (our main). If there are conflicts, show me each
+one and how you resolved it. Then run `mvn verify` and report the test count, how many are green,
+and the coverage. Finally, start the app and walk through the main flow by hand with curl.
+```
+
+**Result**
+- **Merge:** both branches went in without conflicts. block2-web was built on top of
+  block2-service, and the two pairs touched different packages.
+- **`mvn clean verify`:** BUILD SUCCESS. **89 tests, 89 green**:
+
+  | Tests | Count |
+  |---|---|
+  | vendor tests | 3 |
+  | service tests (matrix rows + PIT happy paths) | 43 |
+  | contract tests | 42 |
+  | architecture rules | 4 |
+
+  Coverage is 93.7% of lines and 86.0% of branches (the gate is 80% / 70%).
+- **Smoke test against the real app** (`docker compose up`): every row in the matrix that can
+  be checked over HTTP behaves as written, including 409 on the second open retro, on modify,
+  delete and add in a closed retro, and on uncomplete; complete still works after close; the
+  filter works; `/reopen` gives 404.
+
+**Best prompt:** AC step 4 (PIT). It found a real gap that 35 carefully written rule tests had
+missed: an action item update that silently changes nothing would have passed every test.
+
+**Worst prompt:** BD step 2, first version. "Check the status code" let a 404 test pass for an
+endpoint that didn't exist. We had to add "and check the body" afterwards.
+
+**What the agent did that we didn't expect:** the smoke test showed that the author `alice`
+is accepted (membership is case-insensitive, D-F1) but **stored as typed**, not as the team's
+spelling `Alice`. No test caught it, because no row in the matrix says how the name is stored.
+**Open question for the team:** normalise to the member's spelling? We added it below instead
+of letting the agent decide.
+
+### Open points after Block 2
+- Store the author with the team's spelling of the member name? (see above)
+- D-F6 (complete after close) is still waiting for the CTO.
