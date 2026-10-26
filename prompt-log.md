@@ -542,3 +542,35 @@ Write it to audit/audit-findings.md. Don't change any code.
 **Verdict:** worked. Grounding changed the audit: no generic "use Lombok"- or "add Swagger"-style
 findings, every finding points to a section, and the ambiguous ones (C2, C3) are flagged instead
 of "fixed".
+
+### Step 3: fix the Critical findings, with the tests watching
+
+**Prompt**
+
+```
+Fix the Critical findings in audit/audit-findings.md one at a time. For each: make the smallest
+change in src/main, run `mvn test` yourself, and stop if anything goes red. Existing tests are
+never edited: if a fix would need that, don't fix it, flag it. Findings marked ⚖️ need a team
+decision: don't fix those, write down why. After each fix, update its entry in the audit (what was
+wrong, which section) and commit it on its own. Finish with `mvn verify` and `git diff -- src/test`.
+```
+
+**Result**
+- **Fix 1, C1 §2.1** (`684b6e8`): the `FeedbackItem` guard message is now
+  `FeedbackItem new: type ACTION_ITEM must be created as an ActionItem`. `mvn test`: 89/89.
+- **Fix 2, M2 §6.1** (`d2a6648`): full `@param`/`@return`/`@throws` on
+  `createRetrospective(teamId, title)`. It's Major, not Critical, but it's a business-rule method
+  and a three-line change. `mvn test`: 89/89.
+- **C2 §1.4, not fixed** ⚖️: field injection lives only in test classes. Converting them means
+  editing existing tests (forbidden in this step), and the vendor test can never comply. Question
+  for the team: does §1.4 apply to `src/test`?
+- **C3 §4.1, not fixed** ⚖️: changing "not a member" from 400 to 409 changes decision F1, matrix row
+  30 and existing tests. That's the team's call, not ours.
+- `mvn verify`: **89/89 green**, coverage 93.7% lines / 86.0% branches, BUILD SUCCESS.
+  `git diff dbbe1e2 -- src/test` is **empty**: no test was touched.
+- **Test for fix 1:** none yet, on purpose. Block 3 has us write it with the other pair's
+  `stackcraft-tests` skill in the swap.
+
+**Verdict:** worked, but only 1 of the 3 Criticals could be fixed inside the rules of this step.
+The other two are real disagreements (a rule vs. a vendor file, and a rule the standard doesn't
+define), and an agent "fixing" them would just be picking a side for us.
