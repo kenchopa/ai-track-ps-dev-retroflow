@@ -11,4 +11,6 @@
 - Before you say you're done: run `./mvnw test` (or `./mvnw verify` for coverage) and report the real result.
 - **Never change, skip or disable a test just to make it pass.** If a test looks wrong, stop and ask us first. `RetroflowBusinessRulesTest` is never edited.
 - **Never add a dependency or plugin without first checking that the exact version exists on Maven Central.** Say which version you checked, and ask before adding it.
-- Never put secrets in code or config, never concatenate strings into JPQL/SQL, and never return stack traces or class names to API clients.
+- Never put secrets in code or config, never concatenate strings into JPQL/SQL, and never return stack traces or class names to API clients. The OpenAI key only comes from the `OPENAI_API_KEY` environment variable.
+- Tests tagged `eval` call a paid model (`./mvnw test -Peval`): only run them when asked. Normal tests never call a real model; stub `SummaryModel` instead.
+- Tools in this repo: StackCraft standards via the `ai-track-standards` MCP server, mechanical checks via `check_standards` (`retroflow-decisions` server), skills in `.claude/skills/`, agents `reviewer` (read and run only) and `implementer`. See `TEAM-KIT.md`.

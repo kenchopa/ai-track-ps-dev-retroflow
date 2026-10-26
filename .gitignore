@@ -1,7 +1,17 @@
 target/
 .idea/
 *.iml
-.vscode/
+# Shared on purpose (TEAM-KIT.md): the MCP servers for VS Code / Copilot.
+!.vscode/
+.vscode/*
+!.vscode/mcp.json
+# Shared on purpose: the team's Claude Code setup. Personal settings and worktrees stay out.
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+!.claude/agents/
+!.claude/hooks/
 .classpath
 .project
 .settings/

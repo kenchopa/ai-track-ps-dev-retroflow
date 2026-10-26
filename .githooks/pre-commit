@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Guardrail (TEAM-KIT.md): a commit may ADD tests, but never change or delete an existing one.
+# "Make the build green by editing the test" is the shortcut an AI agent (or a tired human) takes.
+# Bypass on purpose, after asking the team:  ALLOW_TEST_CHANGES="why" git commit ...
+set -euo pipefail
+
+changed=$(git diff --cached --name-status --diff-filter=MDR -- 'src/test/' | awk '{print $NF" ("$1")"}')
+[ -z "$changed" ] && exit 0
+
+if [ -n "${ALLOW_TEST_CHANGES:-}" ]; then
+  echo "pre-commit: existing tests changed, allowed because: $ALLOW_TEST_CHANGES" >&2
+  exit 0
+fi
+
+cat >&2 <<MSG
+pre-commit: this commit changes or deletes existing tests:
+$changed
+
+Existing tests are never changed to make a fix pass (house rules, CLAUDE.md).
+Add a new test instead. If the test itself is really wrong, agree on that with the team and commit with:
+  ALLOW_TEST_CHANGES="<reason>" git commit ...
+MSG
+exit 1
