@@ -316,3 +316,37 @@ and 409 where they apply. Run them and report which fail and why. Don't fix anyt
 
 **Verdict:** needed one fix. Checking the status alone isn't enough for "not found" tests: always
 assert the body too.
+
+### Step 3: restructure while the tests watch
+
+**Prompt**
+
+```
+Follow the plan to make the failing contract tests green, in this order:
+(1) request and response records, (2) FeedbackItemController, (3) ActionItemController,
+(4) GlobalExceptionHandler fixes. Run the controller tests after every part, then stop and list
+what changed. Only touch controller/, dto/ and exception/. Services, entities and repositories
+belong to Pair AC. The tests work with JSON, so they shouldn't need to change: if you think one
+must change, ask first. Don't remove anything without asking.
+```
+
+**Result**
+- New: `CreateFeedbackItemRequest`, `CreateActionItemRequest`, `UpdateFeedbackItemRequest`,
+  `UpdateActionItemRequest`, `FeedbackItemResponse` (`priority`/`completed` only for action
+  items), `FeedbackItemController` (4 endpoints) and `ActionItemController` (5 endpoints).
+- `GlobalExceptionHandler`:
+  - Validation errors on an update body now name the item from the path (`FeedbackItem 100: …`)
+    instead of `… new: …`.
+  - `DataIntegrityViolationException` → 409 `Request -: conflicts with existing data`, logged,
+    and no database text reaches the client.
+- **All 85 tests green**: 42 contract tests, 40 service tests and the 3 vendor tests.
+- `git status`: no test file changed. Nothing in `service/`, `entity/` or `repository/` changed.
+- "Show me every place where an entity is still returned or accepted by a controller": **none**.
+  `TeamController` and `RetrospectiveController` still use the entity as a local variable, only
+  to read the new id for the `Location` header. We accepted that.
+- One error shape everywhere, including bean validation, unreadable JSON, type mismatches,
+  Spring's own 404/405 and the 500 fallback.
+
+**Verdict:** worked. The type and priority stay `String` in the requests on purpose: an enum
+would make Jackson reject `"GREAT"` with a generic "malformed JSON" message, while the service
+returns "must be one of WENT_WELL, NEEDS_IMPROVEMENT".

@@ -1,7 +1,9 @@
 package com.stackcraft.retroflow.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -13,8 +15,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -42,13 +46,24 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleInvalidBody(MethodArgumentNotValidException ex) {
-        String entity = entityName(ex.getBindingResult().getObjectName());
+    public ResponseEntity<ApiError> handleInvalidBody(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        String objectName = ex.getBindingResult().getObjectName();
+        String subject = entityName(objectName) + " " + identifier(objectName, request);
         String reasons = ex.getBindingResult().getFieldErrors().stream()
                 .map(GlobalExceptionHandler::describe)
                 .sorted()
                 .collect(Collectors.joining("; "));
-        return error(HttpStatus.BAD_REQUEST, entity + " new: " + reasons);
+        return error(HttpStatus.BAD_REQUEST, subject + ": " + reasons);
+    }
+
+    /**
+     * Two concurrent requests can both pass a service-level uniqueness check;
+     * the database constraint then catches the second. Never expose its message.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> handleDataConflict(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation", ex);
+        return error(HttpStatus.CONFLICT, "Request -: conflicts with existing data");
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
@@ -90,6 +105,18 @@ public class GlobalExceptionHandler {
      */
     private static String entityName(String objectName) {
         return objectName.replaceFirst("^[a-z]+", "").replaceFirst("Request$", "");
+    }
+
+    /**
+     * "new" for create requests; otherwise the {id} path variable of the resource being changed.
+     */
+    @SuppressWarnings("unchecked")
+    private static String identifier(String objectName, HttpServletRequest request) {
+        if (objectName.startsWith("create")) {
+            return "new";
+        }
+        var pathVariables = (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        return pathVariables == null ? "-" : pathVariables.getOrDefault("id", "-");
     }
 
     private static ResponseEntity<ApiError> error(HttpStatusCode status, String message) {
