@@ -556,3 +556,29 @@ positives, and why.
 with the compose setting: the bare image refuses remote console access, so reading the code alone
 would have left it at "maybe". We still had to check the line numbers ourselves (the first draft
 cited the vendor test at :46/:59/:74, the real lines are :48/:60/:76).
+
+### Step 3: the review document
+
+**Prompt**
+
+```
+Turn the step 2 findings into review/pre-staging-review.md, a document we can send to the dev team:
+a 3-4 sentence summary plus one plain-language line a non-technical stakeholder can act on (QA §6.2),
+the critical issues (must fix before staging), the other issues (should fix / when time allows),
+at least 3 things done well, the false positives we dropped, what we did NOT check (QA §6.1), and a
+sign-off status BLOCKED / CONDITIONAL / APPROVED with the reason. Keep the proof column for every
+finding. Don't change any code.
+```
+
+**Result**
+- `review/pre-staging-review.md`: 2 must-fix, 4 should-fix, 4 low, 5 things done well, 3 false
+  positives, a scope section, and how we checked.
+- **Sign-off: CONDITIONAL.** No runtime defect: every rule held over HTTP. But C1 (an open database
+  console bypasses every rule) and C2 (QA §1.1, no test against a running instance) have to be fixed
+  before staging.
+- Why not BLOCKED: nothing is broken for users, and both fixes are small and clear (a config change
+  and one `RANDOM_PORT` test class). Why not APPROVED: QA §1.1 rates C2 Critical as a standards
+  violation, and C1 is a security exposure by QA §4.2's definition.
+
+**Verdict:** worked. For the showcase: false positive = "JPQL injection" (named parameters); real
+finding = the H2 console, reproduced with curl.
