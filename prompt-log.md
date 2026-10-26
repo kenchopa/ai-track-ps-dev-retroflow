@@ -93,3 +93,40 @@ No test changes are needed.
 - (c) Row 25: "today" comes from the server clock, so the test compares against `LocalDate.now()`.
 
 **Verdict:** worked. All three "closed retro" operations (add, modify, delete) are in the plan, everything is in the service layer, and no test is touched. We accepted the split into `FeedbackItemService` and `ActionItemService`.
+
+### Step 2: let the agent run the tests
+
+**Prompt**
+
+```
+Implement the plan from step 1 (pasted above), in this order: repositories, then TeamService, then
+RetrospectiveService, then the feedback and action item services. After each part, run
+`mvn test -Dtest=RetroflowBusinessRulesTest` yourself, keep going until it passes, then stop and
+list what you changed.
+Hard limits:
+- RetroflowBusinessRulesTest is never edited, skipped or disabled. If a test looks wrong, stop
+  and tell me.
+- No new dependencies.
+- Don't remove anything without asking.
+- Only touch service/, entity/ and repository/.
+```
+
+**Result**
+- Repositories:
+  - `TeamRepository`: `existsByNameIgnoreCase`, `findAllByOrderByNameAsc`, and `findByIdForUpdate` (`PESSIMISTIC_WRITE`)
+  - `RetrospectiveRepository`: `findFirstByTeamIdAndStatus`, `findByTeamIdOrderByDateDescIdDesc`
+  - `FeedbackItemRepository`: `findByRetrospectiveIdOrderByIdAsc`
+  - New `ActionItemRepository.findForTeam`: JPQL with named parameters, and null means "any"
+- Services: `TeamService` and `RetrospectiveService` are implemented. The new
+  `FeedbackItemService` and `ActionItemService` hold the feedback rules.
+- Shared code: `EntityLookup` (find or 404) and `ServiceValidation` (text, enum, member and
+  open-retro checks, all with `[Entity] [id]: reason` messages).
+- `RetrospectiveService` keeps the vendor-test methods and delegates them.
+- `mvn test -Dtest=RetroflowBusinessRulesTest`: 3 run, 0 failures, 0 errors, BUILD SUCCESS.
+  `git diff -- src/test` is empty.
+- `uncompleteActionItem` on a completed item throws `RetroflowException`
+  (`ActionItem 7: already completed, cannot be undone`). It is loud, not silent.
+- Largest class: `RetrospectiveService`, 177 lines (limit 200).
+
+**Verdict:** worked on the first run, so there was no failing test to work around. Because it was
+green immediately, step 3 has to prove that the tests can fail.
