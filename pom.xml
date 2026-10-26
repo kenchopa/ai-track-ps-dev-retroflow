@@ -68,6 +68,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Tests tagged "eval" call a real model and cost money: never in the normal build or CI.
+                 Run them on purpose with `./mvnw test -Peval` (see eval/README.md). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>eval</excludedGroups>
+                </configuration>
+            </plugin>
             <!-- Coverage: report in target/site/jacoco, and fail `mvn verify` below the
                  StackCraft thresholds (standard 3.1: 80% lines, 70% branches). -->
             <plugin>
@@ -149,5 +158,27 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- `./mvnw test -Peval`: only the evaluation of the AI summary, against the real model. -->
+        <profile>
+            <id>eval</id>
+            <properties>
+                <jacoco.skip>true</jacoco.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>eval</groups>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

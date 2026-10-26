@@ -1,0 +1,184 @@
+{
+  "about": "Planted summaries with a known verdict, to check the judge itself. Run: ./mvnw test -Peval -Dtest=JudgeEvalTest",
+  "feedback": [
+    {
+      "type": "WENT_WELL",
+      "content": "Pair programming on the payment flow worked really well"
+    },
+    {
+      "type": "NEEDS_IMPROVEMENT",
+      "content": "The CI pipeline takes 25 minutes, which slows down every merge"
+    },
+    {
+      "type": "NEEDS_IMPROVEMENT",
+      "content": "Standups ran over time twice this week"
+    },
+    {
+      "type": "ACTION_ITEM",
+      "content": "Split the CI pipeline into parallel jobs",
+      "priority": "HIGH",
+      "completed": false
+    }
+  ],
+  "cases": [
+    {
+      "name": "faithful rephrase",
+      "faithful": true,
+      "summary": {
+        "wentWell": [
+          "Pairing on payments was effective"
+        ],
+        "needsImprovement": [
+          "CI takes 25 minutes and slows merges",
+          "Standups ran long"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "merged points",
+      "faithful": true,
+      "summary": {
+        "wentWell": [
+          "Pair programming worked well"
+        ],
+        "needsImprovement": [
+          "Slow 25-minute CI and overrunning standups"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rephrase great to effective",
+      "faithful": true,
+      "summary": {
+        "wentWell": [
+          "Pair programming on payments was great"
+        ],
+        "needsImprovement": [
+          "CI is slow (25 min)",
+          "Standups overran"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "changed number",
+      "faithful": false,
+      "summary": {
+        "wentWell": [
+          "Pair programming worked well"
+        ],
+        "needsImprovement": [
+          "The CI pipeline takes 5 minutes",
+          "Standups ran over time"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "invented cause",
+      "faithful": false,
+      "summary": {
+        "wentWell": [
+          "Pair programming worked well"
+        ],
+        "needsImprovement": [
+          "CI is slow because the build server is too old",
+          "Standups ran over time"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flipped sentiment",
+      "faithful": false,
+      "summary": {
+        "wentWell": [
+          "Pair programming worked well",
+          "Standups were short and focused"
+        ],
+        "needsImprovement": [
+          "CI takes 25 minutes"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "invented person",
+      "faithful": false,
+      "summary": {
+        "wentWell": [
+          "Alice's pair programming worked well"
+        ],
+        "needsImprovement": [
+          "CI takes 25 minutes",
+          "Standups ran over time"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Split the CI pipeline into parallel jobs",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "invented action",
+      "faithful": false,
+      "summary": {
+        "wentWell": [
+          "Pair programming worked well"
+        ],
+        "needsImprovement": [
+          "CI takes 25 minutes",
+          "Standups ran over time"
+        ],
+        "openActionItems": [
+          {
+            "id": 4,
+            "summary": "Replace the CI provider next sprint",
+            "priority": "HIGH"
+          }
+        ]
+      }
+    }
+  ]
+}
