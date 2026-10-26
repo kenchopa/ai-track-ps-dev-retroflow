@@ -582,3 +582,31 @@ finding. Don't change any code.
 
 **Verdict:** worked. For the showcase: false positive = "JPQL injection" (named parameters); real
 finding = the H2 console, reproduced with curl.
+
+### Step 4: draft the `stackcraft-tests` skill
+
+**Prompt**
+
+```
+Write .claude/skills/stackcraft-tests/SKILL.md (under 40 lines, frontmatter name + description) for
+writing and reviewing tests the StackCraft way. Base it on what worked today: Block 2 AC step 3
+(one test per matrix row, naming, AAA, exact assertions, prove the test can fail) and BC step 2
+(status AND body, no lone isNotNull, isInstanceOf on a hierarchy, a test against the running app).
+The skill must send the AI to the ai-track-standards MCP server (stackcraft-coding §3 and
+stackcraft-qa) instead of memory, and cite section numbers. Add a template test class next to it that
+shows the HTTP-level layout (QA §1.1), and prove the template compiles and passes before committing.
+Spend most of the care on the description: when should the AI load this skill?
+```
+
+**Result**
+- `.claude/skills/stackcraft-tests/SKILL.md`: 35 lines, with a section for writing and one for reviewing, plus "never" rules.
+- `template/BusinessRuleHttpTest.java`: a `RANDOM_PORT` + `TestRestTemplate` test for the
+  "one OPEN retro" rule, with a unique team name, Arrange/Act/Assert, and checks on both the status
+  and the `error` body. Proven: copied into `src/test` temporarily, then
+  `mvn test -Dtest=BusinessRuleHttpTest` gave `Tests run: 1, Failures: 0`. Removed again, and `git status` was clean.
+- The description names the triggers: adding tests for a fix, a business rule or an endpoint;
+  reviewing test quality; checking a suite against the QA standards.
+- Catch: `.claude/` is in the global gitignore on this machine, so the skill folder needs
+  `git add -f`. Without it, the skill would never have reached the other pair.
+
+**Verdict:** worked. The template does double duty: it's also the start of the fix for review finding C2.
