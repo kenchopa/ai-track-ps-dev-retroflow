@@ -14,7 +14,7 @@
 
 | # | Severity | Section | Where | Status |
 |---|---|---|---|---|
-| C1 | Critical | §2.1 Exception message format | `entity/FeedbackItem.java:79` | 🔧 step 3 |
+| C1 | Critical | §2.1 Exception message format | `entity/FeedbackItem.java:79` | ✅ |
 | C2 | Critical | §1.4 Constructor injection only | 6 test classes (+ the vendor test) | ⚖️ |
 | C3 | Critical (disputed) | §4.1 HTTP status codes | `service/ServiceValidation.java:49` | ⚖️ |
 | M1 | Major | §5.2 Validate all input at the boundary | 3 request records + `ActionItemController.java:62` | ➖ |
@@ -32,7 +32,7 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
 
 ## Critical
 
-### C1 · §2.1: an exception from the service layer that doesn't follow the message format 🔧
+### C1 · §2.1: an exception from the service layer that doesn't follow the message format ✅
 
 - **Where:** `src/main/java/com/stackcraft/retroflow/entity/FeedbackItem.java:79`
   ```java
@@ -51,6 +51,9 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
   ```java
   throw new IllegalArgumentException("FeedbackItem new: type ACTION_ITEM must be created as an ActionItem");
   ```
+- **Fixed (step 3, fix 1):** what was wrong: a free-text message that the §2.1 parser can't read.
+  Based on §2.1. `mvn test`: 89/89 green, no test changed. The new test that pins the message is
+  written with the `stackcraft-tests` skill in the swap.
 
 ### C2 · §1.4: field injection in test classes ⚖️
 

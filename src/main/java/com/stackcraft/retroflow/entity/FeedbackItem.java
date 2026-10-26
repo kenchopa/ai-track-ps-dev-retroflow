@@ -76,7 +76,7 @@ public class FeedbackItem {
      */
     public FeedbackItem(Retrospective retrospective, String content, FeedbackType type, String author) {
         if (type == FeedbackType.ACTION_ITEM) {
-            throw new IllegalArgumentException("Use ActionItem for feedback of type ACTION_ITEM");
+            throw new IllegalArgumentException("FeedbackItem new: type ACTION_ITEM must be created as an ActionItem");
         }
         this.retrospective = retrospective;
         this.content = content;
