@@ -429,3 +429,69 @@ of letting the agent decide.
 ### Open points after Block 2
 - Store the author with the team's spelling of the member name? (see above)
 - D-F6 (complete after close) is still waiting for the CTO.
+
+---
+---
+
+# Prompt log: Block 3
+
+Same setup as Block 2: Claude Code plays both pairs one after the other.
+- Pair AD works on `block3-audit`.
+- Pair BC works on `block3-review`.
+- Both get merged into `block3` (our stand-in for `main`).
+
+Every StackCraft rule we cite in this block comes from the `ai-track-standards` MCP server
+(`read_document("stackcraft-coding")`, version 3.1). The local `stackcraft-coding-standards.md`
+is only used to check the quotes.
+
+## Setting up (both pairs)
+
+- `.mcp.json` in the root of the repo registers `ai-track-standards` for Claude Code
+  (`https://ai-track-ps-production.up.railway.app/mcp`, HTTP, no login). Copilot users: use
+  `.vscode/mcp.json` from `block3.md`. It isn't committed because `.vscode/` is in `.gitignore`.
+- The tools list shows `mcp__ai-track-standards__list_documents` and `read_document`.
+  `list_documents` returns `stackcraft-coding`, `stackcraft-qa` and `meridian-regulatory`.
+- There is no local JDK on this machine. Maven runs in Docker:
+  `docker run --rm -v "$PWD":/workspace -v ai-track-ps-dev-retroflow_m2:/root/.m2 -w /workspace maven:3.9-eclipse-temurin-21 mvn -B verify`.
+
+## Step 1 (both pairs): feel the difference
+
+The same question, asked three times with `claude -p` in an empty folder, so the repo's
+`CLAUDE.md` (which already contains the answer) is not loaded.
+
+**Question**
+
+```
+What exact format does StackCraft require for exception messages in the service layer,
+and which HTTP status code do we have to use when a business rule is violated?
+```
+
+**Our extra sentence for the run with the connector**
+
+```
+Answer only from the stackcraft-coding document on the ai-track-standards MCP server: read it
+with read_document first, quote the exact section number and wording you rely on, and say so if
+the document does not answer part of the question.
+```
+
+| Run | Setup | What came back |
+|---|---|---|
+| A: "off" | MCP off, file tools still on | It **went looking on disk** and found `ai-course/ai-track-ps-dev/stackcraft-coding-standards.md`. The answer was correct (§2.1, 409), but grounded in a file we never pointed it to. "Switching off the connector" is not the same as "no context" when an agent can read files. |
+| B: really off | MCP off, file and web tools off | **Honest:** "I don't recognize StackCraft… rather than guess, I'll say I don't know". Then it still gave a "usual practice" fallback: **422** (or 409) and an `ERROR_CODE: message` / RFC 9457 format. That is wrong for StackCraft (§4.1 says 409, and §2.1 is a different format). Anyone who reads only the bullets copies the wrong answer. |
+| C: on | MCP on, plus our extra sentence | Called `read_document`, quoted **§2.1** `[EntityType] [identifier]: [human-readable reason]` with the 3 examples, and **§4.1** "Business rule violation → 409 Conflict" plus "Using … 400 for a business rule violation, is a Critical violation." It also listed what the document **doesn't** cover: which exception class to use, what an "identifier" is when there is no id, and where validation ends and a business rule begins. |
+
+**Check against `stackcraft-coding-standards.md`:** §2.1 (lines 67-80) and §4.1 (lines 187-204)
+exist and are quoted word for word. Run C also noticed that the §2.2 sample body says
+`"status": 400`, which contradicts §4.1 if you copy it for a business rule. That one is easy to
+miss.
+
+**Our own service layer:** we already use the §2.1 format, e.g. `ActionItemService:117`
+`"ActionItem " + id + ": already completed, cannot be undone"` (the standard's own example) and
+`NotFoundException` → `"{Entity} {id}: not found"`. Our own convention for when there's no id
+yet: `Team new: …`, `FeedbackItem new: …`, and `Request -: …` for errors that belong to no
+entity (decision G3). The standard says nothing about this case, and run C flagged that gap too.
+
+**Verdict:** worked. The difference: without the connector you get either an honest "I don't
+know" followed by a plausible wrong default, or an agent that quietly grounds itself in whatever
+file it finds. With the connector you get the real section numbers, quotes you can check, and a
+list of what the document leaves open.
