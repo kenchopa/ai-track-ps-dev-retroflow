@@ -495,3 +495,64 @@ entity (decision G3). The standard says nothing about this case, and run C flagg
 know" followed by a plausible wrong default, or an agent that quietly grounds itself in whatever
 file it finds. With the connector you get the real section numbers, quotes you can check, and a
 list of what the document leaves open.
+
+## Pair BC (`block3-review`)
+
+### Step 2: the review, with proof
+
+**Prompt**
+
+```
+You are the senior developer reviewing RetroFlow before it goes to staging. First read StackCraft's
+standards through the ai-track-standards MCP server: read_document("stackcraft-coding") and
+read_document("stackcraft-qa"). Cite only section numbers you actually read there.
+Then review the codebase and retroflow-brief.md on four dimensions: security, API design, business
+rules and test quality. Do NOT change any code.
+Every finding needs proof: either a quoted line (file:line) or a command you ran plus its output.
+Start the app (Docker, port 18080) and check every business rule from the brief over HTTP, one
+operation at a time. "Cannot be modified or deleted" is separate operations: add, modify and delete,
+for feedback items AND action items.
+Give every finding a severity (Critical/High/Medium/Low, QA §4.2 definitions) and a fix.
+The brief says no authentication is required: don't report missing auth. Before you report an
+injection finding, show me the concatenated string. List the findings you dropped as false
+positives, and why.
+```
+
+**Result**
+- The MCP server was used for both documents: `stackcraft-coding` v3.1 and `stackcraft-qa` v2.0.
+  The quoted sections (coding §2.1, §2.2, §4.1, §4.2, §5.1, §5.3 and QA §1.1, §2.1, §2.2, §3.1,
+  §3.2, §4.2, §6.1, §6.2) were checked against `stackcraft-coding-standards.md`. There is no local
+  copy of the QA document, so those quotes come only from the server.
+- **Business rules over HTTP (running app, `retroflow-review:block3` on :18080):** all correct.
+
+  | Request | Response |
+  |---|---|
+  | 2nd OPEN retro | `409 Team 1: already has an open retrospective (1)` |
+  | close twice | `409 Retrospective 1: already closed` |
+  | `PUT …/reopen` | `404` |
+  | closed retro: add feedback / add action item | `409 … cannot add feedback to a closed retrospective` (both) |
+  | closed retro: modify feedback / delete feedback | `409 FeedbackItem 1: cannot modify …` / `cannot delete …` |
+  | closed retro: modify action item (both routes) / delete it | `409 ActionItem 2: cannot modify …` / `cannot delete …` |
+  | complete after close | `200 completed:true` (F6) |
+  | complete twice | `409 ActionItem 2: already completed` |
+  | uncomplete a completed item | `409 ActionItem 2: already completed, cannot be undone` |
+  | filter `priority=HIGH&completed=true` | `200 [the one item]` |
+
+- **Input:** 400s with meaningful messages for an empty member list, duplicate members, an unknown
+  type, an author who isn't a member, ACTION_ITEM through the feedback route, `priority=URGENT`,
+  `completed=maybe` and `/teams/abc`. One weak spot: a bad `date` only says
+  `Request -: malformed JSON or invalid field value`.
+- **Findings:** 2 must-fix (C1 the H2 console is open with an empty password via compose,
+  reproduced; C2 no HTTP-level test of any business rule, QA §1.1), 4 should-fix (race on add vs.
+  close, author spelling, vendor `isInstanceOf`, vendor fixed names) and 4 low. Details are in
+  `review/pre-staging-review.md`.
+- **`mvn -B verify` (Docker):** 89 tests, 0 failures, coverage gate met, BUILD SUCCESS.
+- **Dropped as false positives:**
+  - JPQL injection in `ActionItemRepository.findForTeam`: named parameters, nothing concatenated.
+  - Missing auth: out of scope according to the brief.
+  - "Tautological" `isNotNull()` in `ServiceHappyPathTest:65`: it's followed by three `isEqualTo` assertions.
+
+**Verdict:** worked. Starting the app was what made the difference. The H2 finding only shows up
+with the compose setting: the bare image refuses remote console access, so reading the code alone
+would have left it at "maybe". We still had to check the line numbers ourselves (the first draft
+cited the vendor test at :46/:59/:74, the real lines are :48/:60/:76).
