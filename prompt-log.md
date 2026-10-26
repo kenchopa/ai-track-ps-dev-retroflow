@@ -172,3 +172,46 @@ show which fail, and put the code back.
   | open-retro check looks at `CLOSED` instead of `OPEN` | rows 1 and 2, row 34, and the vendor test |
 
 **Verdict:** worked. The row count matches the matrix, and the sabotage run shows the tests notice broken rules.
+
+### Step 4: attack your own tests (PIT)
+
+**Prompt**
+
+```
+Add PIT mutation testing to pom.xml. Before you add them, check on Maven Central that
+pitest-maven and pitest-junit5-plugin exist in the exact versions you choose, and tell me
+which versions you checked. Limit targetClasses to com.stackcraft.retroflow.service.* and
+targetTests to the service tests and RetroflowBusinessRulesTest. Don't bind it to the build.
+Run it, report the mutation score, and list every surviving or uncovered mutant: file, line and
+what was changed. Then write tests that kill them, without changing production code, and
+report the score before and after. If PIT won't run after two tries, sabotage the code by hand
+instead, one bug at a time.
+```
+
+**Result**
+- Checked on Maven Central: `pitest-maven` 1.30.1 and `pitest-junit5-plugin` 1.2.3 (both latest
+  releases). Run it with
+  `./mvnw test-compile org.pitest:pitest-maven:mutationCoverage`. The report is in
+  `target/pit-reports/`.
+- **Before:** 71 mutants, 66 killed, 0 survived, 5 without coverage. **Score 93%.**
+
+  | File:line | Mutation | What it means |
+  |---|---|---|
+  | `ActionItemService:81` | removed `item.setContent(text)` | an update that silently keeps the old text: never noticed |
+  | `ActionItemService:82` | removed `item.setPriority(...)` | the same for priority |
+  | `ActionItemService:83` | `return item` → `return null` | the API would return an empty body |
+  | `RetrospectiveService:131` | `addFeedbackItem` returns null | the vendor-facing delegate is only tested on a *closed* retro |
+  | `RetrospectiveService:174` | `uncompleteActionItem` returns null | only tested on a *completed* item |
+
+- The root cause is the same in every case: the matrix lists the **rule violations**, and we
+  tested those carefully, but the happy path of "modify an action item" (rows 10/13 cover
+  feedback, not action items) was never run.
+- New `ServiceHappyPathTest` (3 tests). Production code unchanged.
+- **After:** 71 of 71 killed, **100%**. A cross-check with the stronger mutator set
+  (`-Dmutators=STRONGER`) also killed 88 of 88.
+- The delete path of a feedback item in a closed retrospective: no mutant survived there. Rows 9
+  and 11 kill the "remove the check" mutant (we also saw that in the step 3 sabotage).
+
+**Verdict:** worked. The lesson: the mutants that matter weren't on the rules we worried about,
+they were on the "boring" update path nobody wrote a row for. Would we have spotted a missing
+`setPriority` in a code review? Probably not.
