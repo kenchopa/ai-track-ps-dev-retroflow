@@ -495,3 +495,50 @@ entity (decision G3). The standard says nothing about this case, and run C flagg
 know" followed by a plausible wrong default, or an agent that quietly grounds itself in whatever
 file it finds. With the connector you get the real section numbers, quotes you can check, and a
 list of what the document leaves open.
+
+## Pair AD (`block3-audit`)
+
+### Step 2: the audit
+
+**Prompt**
+
+```
+Read the StackCraft coding standards through the ai-track-standards MCP server
+(read_document "stackcraft-coding"). Don't use what you remember about Java standards: if a rule
+isn't in that document, it isn't a finding. Then audit everything under src/ against every
+section, one by one. For every finding give: the file and line, the exact quote of the section it
+breaks, why it matters (use the document's own reason where it gives one), the correct
+implementation as code, and the severity from the section's "Violation severity" line. Sort
+Critical → Major → Minor. Use mechanical checks where you can (line counts, grep for @Autowired,
+catch blocks and @Query) and say how you checked. Also list the sections you checked that came
+out clean. Where a rule is ambiguous, or two of our rules conflict, flag it instead of deciding.
+Write it to audit/audit-findings.md. Don't change any code.
+```
+
+**Result:** `audit/audit-findings.md`: 3 Critical, 3 Major and 4 Minor findings, 11 sections clean,
+2 open questions for the Guild, and 1 security issue outside the standards.
+- **C1 §2.1:** `FeedbackItem.java:79` throws `"Use ActionItem for feedback of type ACTION_ITEM"`,
+  which leaves the service layer unparseable. It can't be reached through the API today.
+- **C2 §1.4:** `@Autowired` fields in 6 of our test classes plus the vendor test. Production code is
+  clean (ArchUnit checks it). ⚖️ Fixing it means editing existing tests, which step 3 forbids.
+- **C3 §4.1 (disputed):** "author is not a member" returns 400. It depends on stored state, like our
+  409s do. ⚖️ This is a team decision (F1), not the AI's.
+- **Major:** enum values are validated in the service, not at the boundary (§5.2); the vendor-facing
+  `createRetrospective(teamId, title)` has no JavaDoc tags (§6.1, Major because it's a business
+  rule); layer-first packages (§1.1, grandfathered).
+
+**Then check it**
+- **Three quotes looked up** in `stackcraft-coding-standards.md` (§2.1, §1.4, §5.2, plus §6.1):
+  all verbatim, none made up. One surprise: the document **contradicts itself** on §1.1. The
+  heading says "(CRITICAL)", the severity line says "Major".
+- **Two findings opened at the named line** (`FeedbackItem.java:79`, `ServiceValidation.java:49`):
+  the violation is really there.
+- **§1.1 found?** Yes, as Major and grandfathered. It's tricky because the vendor test imports
+  `…entity`/`…service`/`…exception`, so going feature-first would break a file we may never edit.
+- **False positive from our own tooling:** the method-length script reported a 49-line test. A
+  `{` inside a JSON string literal threw off the brace counting, and the method is really 4 lines.
+  A mechanical check needs checking too.
+
+**Verdict:** worked. Grounding changed the audit: no generic "use Lombok"- or "add Swagger"-style
+findings, every finding points to a section, and the ambiguous ones (C2, C3) are flagged instead
+of "fixed".
