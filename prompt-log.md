@@ -29,3 +29,67 @@ why the build fails right now: for each failing test, what is missing.
   is *missing*: it's all unimplemented.
 
 **Verdict:** worked. The agent ran the build itself (not a guess), and `git status` was clean afterwards.
+
+---
+
+## Pair AC (`block2-service`)
+
+### Step 1: plan
+
+**Prompt**
+
+```
+Read these files first, in this order: retroflow-brief.md, decisions.md, test-matrix.md,
+src/test/.../RetroflowBusinessRulesTest.java, then everything under service/, entity/,
+repository/ and exception/.
+Do NOT change any file yet. Give me a plan in three separate parts:
+1. What is needed to make the three tests in RetroflowBusinessRulesTest compile and pass:
+   per test, which service methods are missing, stubbed, or have a different signature.
+2. How every row of test-matrix.md gets enforced in the service layer, and which rows already
+   have a test.
+3. Per rule: the file, the class and method where it is enforced, and the exception it throws.
+For every planned change, name the file and method. Rules go in the service layer, never in a
+controller. Where the matrix and the brief disagree or a row needs a decision we haven't made,
+flag it. Don't decide it. The plan must not change any test.
+```
+
+**Plan (agent output, summarised)**
+
+*Part 1: vendor tests.* All 6 methods exist with the right signatures but throw. Implementing these makes all three tests pass:
+- `TeamService.createTeam`
+- `RetrospectiveService.createRetrospective`
+- `closeRetrospective`
+- `addFeedbackItem`
+- `addActionItem`
+- `completeActionItem`
+- `uncompleteActionItem`
+
+No test changes are needed.
+
+*Part 2/3: where each rule lives.* The new services split for class size (max 200 lines):
+
+| Matrix rows | Where (file → method) | Exception |
+|---|---|---|
+| 1-3 one OPEN retro per team | `RetrospectiveService.createRetrospective` → `TeamRepository.findByIdForUpdate` (pessimistic lock, D-R8) + `RetrospectiveRepository.findFirstByTeamIdAndStatus` | `RetroflowException` |
+| 4 close twice | `RetrospectiveService.closeRetrospective` | `RetroflowException` |
+| 5 no reopen | nothing to add: no method exists. Prove it with a reflection test | – |
+| 6-7 add to closed retro | new `FeedbackItemService.addFeedbackItem` / `ActionItemService.addActionItem` → shared `requireOpen(retro)` | `RetroflowException` |
+| 8, 10, 13 modify | new `FeedbackItemService.updateFeedbackItem(id, content)`, `ActionItemService.updateActionItem(id, content, priority)` | `RetroflowException` |
+| 9, 11, 14 delete | new `FeedbackItemService.deleteFeedbackItem(id)` (covers action items too) | `RetroflowException` |
+| 12, 15-18 complete/uncomplete | `ActionItemService.completeActionItem` / `uncompleteActionItem`. **No** open-retro check on complete (D-F6) | `RetroflowException` |
+| 19-23 team input | `TeamService.createTeam` + shared `ServiceValidation` helpers | `InvalidInputException`, `RetroflowException` (dup name) |
+| 24-26 retro input, lookups | `RetrospectiveService`, `ServiceValidation.requireText` | `InvalidInputException`, `NotFoundException` |
+| 27-31 feedback input | `ServiceValidation.parseEnum`, `requireMember` | `InvalidInputException` |
+| 32 not found | every `find…OrThrow` helper | `NotFoundException` |
+| 33 list feedback | `FeedbackItemService.getFeedbackItems` | – |
+| 34-35 filter | `ActionItemService.getActionItemsForTeam(teamId, priority, completed)` → `ActionItemRepository` JPQL with named parameters | `InvalidInputException` |
+
+- `RetrospectiveService` keeps the four feedback and action item methods the vendor test calls, and delegates them to the new services.
+- Already tested: rows 1, 6 and 15 (the vendor tests). No other row has a test.
+
+*Flagged, not decided:*
+- (a) Row 12 (complete in a closed retro) depends on D-F6, which is still open for the CTO.
+- (b) The brief says nothing about validating in the service when the controller already does it. We validate in both (defence in depth), using the same messages.
+- (c) Row 25: "today" comes from the server clock, so the test compares against `LocalDate.now()`.
+
+**Verdict:** worked. All three "closed retro" operations (add, modify, delete) are in the plan, everything is in the service layer, and no test is touched. We accepted the split into `FeedbackItemService` and `ActionItemService`.
