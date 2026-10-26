@@ -7,7 +7,7 @@
   green, coverage gate met).
 - **Severity:** the "Violation severity" line of each section. Findings are sorted Critical →
   Major → Minor.
-- **Status:** 🔧 to fix in step 3 · ✅ fixed · ⚖️ needs a team decision (flagged, not decided) · ➖ accepted /
+- **Status:** ✅ fixed in step 3 · ⚖️ needs a team decision (flagged, not decided) · ➖ accepted /
   not fixed, with the reason given.
 
 ## Summary
@@ -18,7 +18,7 @@
 | C2 | Critical | §1.4 Constructor injection only | 6 test classes (+ the vendor test) | ⚖️ |
 | C3 | Critical (disputed) | §4.1 HTTP status codes | `service/ServiceValidation.java:49` | ⚖️ |
 | M1 | Major | §5.2 Validate all input at the boundary | 3 request records + `ActionItemController.java:62` | ➖ |
-| M2 | Major | §6.1 JavaDoc (business-rule method) | `service/RetrospectiveService.java:45-53` | 🔧 step 3 |
+| M2 | Major | §6.1 JavaDoc (business-rule method) | `service/RetrospectiveService.java:45-53` | ✅ |
 | M3 | Major | §1.1 Package structure | every package | ➖ grandfathered |
 | m1 | Minor | §6.1 JavaDoc on public service methods | 9 lookup methods | ➖ |
 | m2 | Minor | §3.2 Test naming convention | 3 of our tests, 3 vendor tests | ➖ |
@@ -138,7 +138,7 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
   This was a deliberate Block 2 choice (see the BD step 3 verdict in `prompt-log.md`), and it
   belongs on the backlog.
 
-### M2 · §6.1: the vendor-facing `createRetrospective(teamId, title)` has no `@param`/`@return`/`@throws` 🔧
+### M2 · §6.1: the vendor-facing `createRetrospective(teamId, title)` has no `@param`/`@return`/`@throws` ✅
 
 - **Where:** `src/main/java/com/stackcraft/retroflow/service/RetrospectiveService.java:45-53`. The
   JavaDoc only has a description and an `@see`.
@@ -149,7 +149,8 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
 - **Why it matters:** it is the entry point the vendor test calls. Someone reading only this method
   can't tell that it throws 409 and 404.
 - **Correct implementation:** the full tags, like the three-argument overload has.
-- **To fix** in step 3, together with C1. It is a one-line-per-tag change.
+- **Fixed (step 3, fix 2):** what was wrong: no `@param`/`@return`/`@throws` on a business-rule
+  method. Based on §6.1. `mvn test`: 89/89 green, no test changed. Class is now 183 lines (§1.2: ≤ 200).
 
 ### M3 · §1.1: layer-first packages ➖ grandfathered
 
