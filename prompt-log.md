@@ -350,3 +350,36 @@ must change, ask first. Don't remove anything without asking.
 **Verdict:** worked. The type and priority stay `String` in the requests on purpose: an enum
 would make Jackson reject `"GREAT"` with a generic "malformed JSON" message, while the service
 returns "must be one of WENT_WELL, NEEDS_IMPROVEMENT".
+
+### Step 4: lock it in with an architecture test
+
+**Prompt**
+
+```
+Add ArchUnit as a test dependency. First check on Maven Central that the artifact and the exact
+version exist, and tell me what you checked. Then write one architecture test class with these
+rules: controllers don't use repositories; controller methods don't return or accept entities
+(also not inside a List); services don't depend on controllers or DTOs; no field injection.
+Prove each rule can fail: break it on purpose, run the test, show the failure, and put the code
+back. Afterwards git status must show no change in src/main.
+```
+
+**Result**
+- `com.tngtech.archunit:archunit-junit5:1.5.1`, test scope. It is the latest release in
+  maven-metadata.xml, and the `.pom` returns HTTP 200 on repo1.maven.org.
+- `ArchitectureTest` has 4 rules, all green on the current code. The "no entities" rule uses
+  `getAllInvolvedRawTypes()`, so `List<Team>` is caught too. A plain `notHaveRawReturnType`
+  would have missed it.
+- Proof. Each sabotage broke exactly its own rule and nothing else, and the code was restored
+  with `git checkout`:
+
+  | Sabotage | Rule violated |
+  |---|---|
+  | `TeamController` references `TeamRepository` | `controllersDoNotUseRepositories` |
+  | `public List<Team> sabotage()` in `TeamController` | `controllersDoNotExposeEntities` ("exposes entity Team") |
+  | `TeamService` references `TeamResponse` | `servicesDoNotDependOnWebLayer` |
+  | `@Autowired` field in `TeamController` | `noFieldInjection` |
+
+- `git status src/main` was empty afterwards.
+
+**Verdict:** worked. We checked the `pom.xml` dependency ourselves too.
