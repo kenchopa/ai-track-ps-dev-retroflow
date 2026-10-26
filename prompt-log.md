@@ -1195,3 +1195,75 @@ minutes. We would never have found them by reading our own config.
   - Before writing any code, get the DPO's sign-off on sending retro feedback to a US model
     provider (or use an EU-hosted model).
   - Turn on branch protection with `test-guardrail` required on day one.
+
+---
+---
+
+# Prompt log: Web UI (`retroflow-ui`)
+
+Branch `retroflow-ui`, on top of `bonus-kengy`. Made with the `plan-design` skill and the
+**design-engineering** aesthetic (fetched from the toolbox catalog). The design-team agents
+couldn't be spawned in this session (the Agent tool is denied by a permission rule), so the
+blueprint's tasks were executed directly, in order.
+
+## The ask
+
+```
+Create a new branch for adding a UI on top of this retrospective for all the features. Use the
+designs in the Claude skills to make it very user-friendly and intuitive to see.
+```
+
+## Plan
+
+- **Aesthetic:** asked first, as the skill requires. Chosen: **design-engineering**. The dials were
+  adapted from 8/6/4 to **5/4/5** for "intuitive": predictable layout, motion only to explain a
+  change, normal app density.
+- **Blueprint:** `designs/retroflow-web-ui.md`. It covers components, page layouts, the motion
+  spec, six tasks, acceptance criteria and validation commands.
+- **The key idea is rules as affordances:**
+  - one open retro: "Start retrospective" becomes "Continue Sprint 42"
+  - closed means frozen: composers disappear, a banner and "Read-only" appear
+  - done is final: a check instead of an untickable box, and a confirm that says so
+  - summary only for closed retros
+  - no login: an explicit "Posting as" picker, remembered per team
+
+## Build (tasks 1-5)
+
+- **Stack** (every version checked on npm, newest stable release at least two weeks old):
+  Vite 8.3.4, React 19.3.0, TypeScript 7.0.2, Tailwind 4.3.3, TanStack Query 5.104.2, React
+  Router **7**.18.4, framer-motion 14.1.0, Phosphor 2.1.10 and Geist / Geist Mono. React Router
+  is deliberately 7.x and not 8.x: the 7.x API is the one I know works.
+- **Install failure:** npm crashed with `Cannot read properties of null (reading 'edgesOut')`
+  inside its peer resolver, on vitest 5.0.x's optional peers. Fixed with `legacy-peer-deps` in
+  `ui/.npmrc`, so `npm ci` and Docker behave the same. The price showed up right away: the test
+  peer `@testing-library/dom` had to be added by hand (pinned 10.4.2).
+- **What's in it:**
+  - `DESIGN.md` with the tokens (CSS variables + Tailwind v4 `@theme`, light and dark)
+  - 15 primitives (native `<dialog>`, WAI-ARIA tabs, radio-based segmented control)
+  - Teams, Team (retros + action items) and Retro board (3 columns, tabs below 768 px), plus the
+    AI summary panel
+- **Packaging:** unprivileged nginx with an `/api` proxy, and `docker compose up --build app ui`.
+
+## Validation (task 6): what it caught
+
+| Check | Found | Fixed |
+|---|---|---|
+| Computed WCAG contrast of every token pair | `fg-subtle` was 4.40:1 on `surface-2` (AA needs 4.5). Input borders were 1.5:1 (WCAG 1.4.11 needs 3:1), and DESIGN.md *claimed* 3:1. The composer used a filled field with no real boundary | darker `fg-subtle` (4.8:1), a new `control` border token (3.3:1), a bordered composer, DESIGN.md corrected and marked as such |
+| Tests | every hidden `<dialog>` (one per item card) repeated its text in the DOM | dialog content only renders while open, plus the 220 ms close animation |
+| `curl -I` on nginx | **no security headers:** an `add_header` in a `location` drops the server-level ones | headers in a snippet included in every location; CSP, nosniff and DENY on every response |
+| Docker health | the UI container was **unhealthy** although it served fine: `localhost` resolves to IPv6 inside the container and nginx listens on IPv4 | the health check uses `127.0.0.1` |
+| Screenshots at 390 px | the first mobile shots looked broken, but headless Chrome has a minimum window width of about 500 px | real viewport emulation (Playwright CLI with the installed Chrome, not a project dependency): **0 px horizontal overflow** at 390/768/1024/1280/1440, light and dark |
+| Mobile board | "Needs improvement" pushed the tabs into scrolling; the column heading repeated the tab | short labels on equal-width tabs; the heading is screen-reader-only on mobile |
+| Rebuilding `ui` | it restarted `app` (a dependency), and the in-memory data was gone | rebuild with `--no-deps` |
+
+**End result:**
+- typecheck clean, **26/26 UI tests**, build OK
+- no emoji, no `h-screen`, no Inter, no pure black, no purple
+- one icon library
+- keyboard: the first Tab lands on "Skip to content", and Enter moves focus to `main`
+- the real AI summary renders in about 3 s and leaves out done action items
+- backend `mvn verify`: 130/130
+
+**Verdict:** worked. The design skill gave strong defaults, but the most valuable part was
+measuring instead of trusting. The contrast table we wrote ourselves was wrong in two places, and
+only computing the ratios showed it.

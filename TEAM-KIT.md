@@ -24,6 +24,7 @@ commands it runs on your machine. That's on purpose, and it's the only click.
 | Agents: `reviewer` (reads and runs, **can't edit**) and `implementer` (edits, runs the build) | `.claude/agents/` | Claude Code |
 | **Guardrail:** existing tests (`src/test`, `mcp-decisions/test`) can't be changed | `.githooks/pre-commit` (any tool), `.claude/hooks/protect-tests.sh` (blocks the edit itself), and the `test-guardrail` CI check on every PR | all / Claude Code / GitHub |
 | Shared settings: MCP servers enabled, edit hook on | `.claude/settings.json` | Claude Code |
+| Design system for the web UI (tokens, rules, blueprint) | `DESIGN.md`, `designs/` | all |
 
 ## How to use it
 

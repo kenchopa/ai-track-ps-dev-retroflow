@@ -8,6 +8,14 @@ is finally one place that shows whether those action items were ever resolved.
 > enforced in the service layer. 89 tests run: the vendor tests, one test per `test-matrix.md` row,
 > web contract tests and architecture rules. Coverage is above the gate.
 
+
+## Web UI
+
+A browser UI for every feature lives in `ui/`: teams, retrospectives, feedback, action items and
+the AI summary. Start everything with `docker compose up --build app ui` and open
+http://localhost:5173. Details are in `ui/README.md`; the design is in `DESIGN.md` and
+`designs/retroflow-web-ui.md`.
+
 ## Tech stack
 
 - Java 21, Spring Boot 3.3.4 (web, data-jpa, validation, actuator)
