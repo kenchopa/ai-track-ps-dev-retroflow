@@ -722,3 +722,92 @@ Spend most of the care on the description: when should the AI load this skill?
   `git add -f`. Without it, the skill would never have reached the other pair.
 
 **Verdict:** worked. The template does double duty: it's also the start of the fix for review finding C2.
+
+---
+
+## Swap: each pair runs the other pair's skill in a fresh session
+
+Both runs used `claude -p` with no history: the MCP server attached, scoped permissions, and a
+prompt that **does not mention the skill**.
+
+### Pair AD runs `stackcraft-tests`
+
+**Prompt**
+
+```
+We fixed the Critical findings from our StackCraft audit in step 3 (see audit/audit-findings.md,
+the findings marked ✅). Write the tests for those fixes. There is no local JDK: run Maven in
+Docker with docker run … maven:3.9-eclipse-temurin-21 mvn -B -ntp test
+```
+
+**Result**
+- **Picked up the skill on its own:** its very first tool call was `Skill stackcraft-tests`. Then
+  it read `stackcraft-coding` **and** `stackcraft-qa` through the MCP server.
+- It wrote 4 tests for C1 (`c48e738`):
+  - `entity/FeedbackItemTest`: the exact §2.1 message, plus the two types that still pass.
+  - `FeedbackItemTypeHttpTest`: over HTTP on the running app (QA §1.1), ACTION_ITEM gives a 400
+    with the service's message and nothing is saved.
+- It worked out by itself why there are two tests: the guard can't be reached through the API,
+  so only a unit test can pin its message.
+- **Proved they can fail:** it put the old message back, and then disabled the service check. The
+  right test failed both times, and the code was restored with `git checkout`.
+- It correctly left M2 (JavaDoc only) and C2/C3 (⚖️) without tests.
+- It ran `mvn test`, but not `mvn verify`. We ran that ourselves: **93/93, coverage 94.0% lines /
+  88.0% branches**, BUILD SUCCESS.
+- **Did it do what BC had in mind?** Yes, and better: it **refused to copy the template's field
+  injection** (`@Autowired private TestRestTemplate http`, the C2 pattern) and used a constructor.
+
+**Feedback we gave Pair BC:** your template teaches the pattern our audit flags as Critical
+(§1.4). BC fixed the template to use constructor injection, and proved it again:
+`mvn test -Dtest=BusinessRuleHttpTest` → 1/1, then removed it from `src/test`.
+
+### Pair BC runs `stackcraft-audit`
+
+**Prompt**
+
+```
+Check this codebase against StackCraft's coding standards and tell me where it violates them.
+```
+
+**Result**
+- **Picked up the skill on its own:** its first tool call was `Skill stackcraft-audit`, then
+  `read_document("stackcraft-coding")`.
+- It found the existing `audit/audit-findings.md`, **left it alone**, kept its IDs and wrote
+  `audit/audit-findings-2026-10-26.md`.
+- **Found what our audit missed:**
+  - 15 Minor items, e.g. `TeamControllerTest:62` without `// Arrange`. Our AAA script skipped that
+    one for the same `{`-in-a-string reason as the method-length script.
+  - 12 hard-coded ids in expected messages.
+  - The `@MockBean` fields as a §1.4 question.
+  - `m1` line numbers that went stale after our own fix 2.
+  - §3.1 having no severity line.
+- **Checked:** `ControllerContractTest.java:24-34` really has four `@MockBean` fields, and
+  `getRetrospective` really moved to `:91`. Both claims are true.
+- **What it could not do:** our permission scope blocked `mvn verify` and a `git log` scan, and it
+  said so instead of pretending.
+- The comparison with BC's review is at the end of `review/pre-staging-review.md`.
+
+**Feedback we gave Pair AD:** say what to do when the audit file already exists. Now in the
+skill (39 lines).
+
+**Verdict:** both skills got loaded from their description alone. That was the point of
+spending the time on the descriptions.
+
+---
+
+## Both pairs: done?
+
+- **With vs. without the connector:** see step 1. Without it we got "I don't know" followed by a
+  wrong default (422), or an agent quietly reading a local file. With it we got §2.1 and §4.1,
+  quoted and checkable.
+- **`mvn verify` on `block3`:** 93/93, coverage 94.0% / 88.0%, BUILD SUCCESS.
+- **Prompts we'd reuse on a real project:**
+  - the AD step 2 audit prompt: "if a rule isn't in that document, it isn't a finding"
+  - the BC review prompt: proof for every finding, by running the app
+  - "prove the test can fail, then restore the code" from Block 2
+- **One thing each for Retro 3:**
+  - **AD:** our own mechanical check (`checks.sh`) proved one of our own "checked" Critical
+    findings wrong. 5 of the 6 classes were `@Autowired` constructors.
+  - **BC:** the agent that read the standard found test-style issues. The agent that ran the
+    app found an open database console. Grounding tells you what the rules say; running the app
+    tells you what's actually broken.

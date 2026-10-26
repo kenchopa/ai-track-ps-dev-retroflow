@@ -25,8 +25,12 @@ class BusinessRuleHttpTest {
     private static final String FIRST_TITLE = "Sprint 1";
     private static final String SECOND_TITLE = "Sprint 2";
 
+    private final TestRestTemplate http;
+
     @Autowired
-    private TestRestTemplate http;
+    BusinessRuleHttpTest(TestRestTemplate http) {
+        this.http = http;
+    }
 
     @Test
     void createRetrospective_whenTeamAlreadyHasOpenRetro_returns409WithMessage() {

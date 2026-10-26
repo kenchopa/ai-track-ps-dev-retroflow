@@ -1,5 +1,9 @@
 # RetroFlow audit against the StackCraft coding standards
 
+> **Second pass:** `audit-findings-2026-10-26.md` is the same audit, rerun by a fresh session with
+> the `stackcraft-audit` skill (swap, step 4). It keeps these IDs and adds 15 Minor items we
+> missed, the `@MockBean` question under C2, and 7 open questions.
+
 - **Source of truth:** `stackcraft-coding` v3.1 (March 2025), read through the `ai-track-standards`
   MCP server with `read_document`. Every quote below comes from that call. Section numbers were
   checked against the local copy `stackcraft-coding-standards.md` in the course repo.
@@ -176,7 +180,8 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
 
 These have `@param`/`@return`/`@throws`, but no sentence saying what the method does:
 - `TeamService.getTeam` (`:60`) and `getAllTeams` (`:67`)
-- `RetrospectiveService.getRetrospective` (`:85`) and `getRetrospectivesForTeam` (`:94`)
+- `RetrospectiveService.getRetrospective` (`:91`) and `getRetrospectivesForTeam` (`:100`) *(line numbers
+  refreshed: fix 2 moved them from `:85`/`:94`)*
 - `FeedbackItemService.getFeedbackItems` (`:68`)
 - the four `EntityLookup` methods (`:41`, `:61`, `:70`, `:79`)
 

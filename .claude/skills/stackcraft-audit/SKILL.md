@@ -27,7 +27,8 @@ isn't in that document is not a finding. Note the version you read. Server unrea
 - a status: open, fixed, or ⚖️ needs a team decision
 
 ## Output
-Write `audit/audit-findings.md`: a summary table, then findings sorted Critical → Major → Minor,
+Write `audit/audit-findings.md` (if it exists: keep its IDs, refresh line numbers, mark new items
+NEW, and write a dated copy instead of overwriting it): a summary table, then findings sorted Critical → Major → Minor,
 then "Checked and clean", "Open questions" (where the standard is ambiguous), and a table of the
 quotes you checked word for word against the document.
 

@@ -95,3 +95,31 @@ it can go to staging.
   `All coverage checks have been met`, `BUILD SUCCESS`.
 - We reproduced two findings ourselves: C1 (curl on the console) and S2 (curl with `alice`). C2 is
   backed by the grep and the `@MockBean` lines.
+
+## Comparison: our review vs. the `stackcraft-audit` skill (swap)
+
+We ran Pair AD's skill in a fresh Claude Code session, at `3e0ddff`, with only *"Check this codebase
+against StackCraft's coding standards and tell me where it violates them."* It loaded
+`stackcraft-audit` by itself, read `stackcraft-coding` through the MCP server, and wrote
+`audit/audit-findings-2026-10-26.md`. It didn't overwrite the existing audit.
+
+| | Our review | The skill |
+|---|---|---|
+| Source | Brief + coding **and** QA standards, plus the running app | Coding standards only, plus reading the code |
+| H2 console open to the network (C1) | ✅ reproduced with curl | ❌ listed only under "outside the standards": no section covers it |
+| No business rule tested over HTTP (C2, QA §1.1) | ✅ | ❌ QA §1.1 is in the QA document, which the skill doesn't read |
+| Race on add vs. close (S1), author spelling (S2) | ✅ | ❌ not a standards question |
+| §4.1 "not a member" 400 vs 409 | ❌ missed | ✅ C3, as a team decision |
+| §5.2 enum checks only in the service | ❌ missed | ✅ M1 |
+| `@MockBean` fields as field injection? | ❌ | ✅ open question Q1 |
+| Test style: naming, AAA, magic values | partly (S3, S4) | ✅ 4 + 10 + 15 places, file:line each |
+| Open questions in the standard itself | ❌ | ✅ 7, including §3.1 having no severity and the §1.1 heading |
+
+**Conclusion:** they don't overlap much, so you want both. The review finds what breaks in
+production (security, missing end-to-end tests, races) because it runs the app and reads the brief.
+The skill finds where we break the letter of the standard, consistently and with file:line, but
+only within the one document it reads. Neither changed our sign-off: **CONDITIONAL** stands.
+
+**Feedback we gave Pair AD:** say what to do when `audit/audit-findings.md` already exists. The
+session had to improvise. It did so well (it kept the IDs, marked new items, and wrote a dated
+file), so that behaviour is now in the skill.
