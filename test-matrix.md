@@ -6,6 +6,7 @@ One row per rule × operation. Built only from `retroflow-brief.md` and `decisio
 - **Message** follows standard 2.1: `[EntityType] [identifier]: [reason]`. Assert with `hasMessageContaining` on the reason part.
 - **Source**: `B` = stated in the brief, `D-xx` = our decision in `decisions.md`.
 - 🟢 = one of the three vendor tests in `RetroflowBusinessRulesTest` already covers this row.
+- **Acceptance:** every row is also a Cucumber scenario over HTTP, tagged `@row-N`, in `src/test/resources/features`. Run one row with `./mvnw test -Dtest=RunCucumberTest -Dcucumber.filter.tags=@row-15`.
 
 ## 1. The four core business rules (the ones from Block 1 Prompt 5)
 

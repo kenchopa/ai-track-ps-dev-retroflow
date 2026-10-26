@@ -1267,3 +1267,88 @@ designs in the Claude skills to make it very user-friendly and intuitive to see.
 **Verdict:** worked. The design skill gave strong defaults, but the most valuable part was
 measuring instead of trusting. The contrast table we wrote ourselves was wrong in two places, and
 only computing the ratios showed it.
+
+---
+---
+
+# Prompt log: Cucumber acceptance scenarios (`cucumber-acceptance`)
+
+Branch `cucumber-acceptance`, on top of `retroflow-ui`.
+
+## The ask
+
+```
+Have a look to create a new branch to cover all tests in Cucumber.
+```
+
+**Asked first (two decisions that weren't mine):**
+- **Scope:** API scenarios for every rule over HTTP (chosen). The alternatives were adding UI
+  end-to-end tests, or replacing the JUnit tests. Replacing would have broken our own guardrail and
+  the vendor test.
+- **Adding the Cucumber dependencies:** approved. The house rules say to ask first.
+
+## Dependencies: what we checked
+
+| Candidate | Result |
+|---|---|
+| Cucumber **8.0.4** (newest) | built for **JUnit 6 and Spring 7**; we run JUnit 5.10.3 and Spring 6.1 (Boot 3.3.4). Rejected before trying. |
+| Cucumber **7.34.9** (newest 7.x, approved) | the smoke test failed: `TestEngine with ID 'cucumber' failed to discover tests`, caused by `NoClassDefFoundError: DiscoveryIssueReporter`, a class that only exists in JUnit Platform 1.13+. Reported, not worked around. |
+| Cucumber **7.18.1** | built against **JUnit 5.10.3**, exactly Boot 3.3.4's version. Chosen by the user over upgrading JUnit for all 130 existing tests. |
+
+We mapped every 7.x release to the JUnit version it was built with; 7.19 and later need JUnit 5.11+.
+The `junit-platform-suite` version is managed by Spring Boot.
+
+## What we built
+
+- **Features** in `src/test/resources/features`, eight files in business language:
+  - teams
+  - one open retrospective
+  - closing
+  - a closed retrospective is frozen
+  - action items
+  - feedback
+  - unknown ids
+  - AI summary
+- **Coverage:** 56 scenarios (77 runs with the examples). **All 35 test-matrix rows are covered**
+  (checked by script). Every scenario is tagged `@row-N`.
+- **Glue** in `acceptance/`:
+  - `AcceptanceConfig`: the whole app on a random port, so every scenario goes through HTTP
+    (StackCraft QA §1.1). This finally covers review finding C2, "no business rule tested over HTTP".
+  - `World`: per-scenario ids. Names are unique per scenario, because all tests share one H2 database.
+  - `ScriptedSummaryModel`: plays OpenAI, faithful or failing in six different ways.
+  - Steps per area.
+- **Every refusal is checked fully:** the status, the `{error, status, timestamp}` body and the
+  exact §2.1 message, with placeholders like `{Sprint 42}` for ids.
+- No existing test was touched.
+
+## What went wrong on the way
+
+1. **The placeholder pattern `{alias}` also matched JSON braces** in request bodies: 16 failures on
+   the first real run. Aliases never contain quotes, so the pattern now excludes them.
+2. **Java's HTTP client silently turns a GET with a body into a POST.** The "list retros of an
+   unknown team" check would have tested the wrong endpoint. GET and POST are now separate scenarios.
+3. **A 2001-character string in a feature file is unreadable.** Boundary values became steps:
+   "adds a text of 2001 characters".
+4. **A stale `smoke.feature`** stayed in `target/` after the source was deleted. `mvn clean` removes it.
+
+## Proving the scenarios can fail
+
+Three rules were broken one at a time; each time `git checkout` restored the file, and
+`git status src/main` was clean afterwards.
+
+| Sabotage | Scenarios that failed |
+|---|---|
+| delete ignores a closed retrospective | rows 9 and 11 |
+| undo silently accepts a done action item | row 15 |
+| a second open retrospective is allowed | row 1 |
+
+## Result
+
+- `mvn clean verify`: **207 tests green** (130 existing + 77 scenario runs; the suite runs once).
+  Coverage went from 94.4% / 82.2% to **94.8% lines / 83.0% branches**.
+- The HTML report is in `target/cucumber-report.html`, and nothing is published to the Cucumber cloud.
+- Run one row: `./mvnw test -Dtest=RunCucumberTest -Dcucumber.filter.tags=@row-15`.
+
+**Verdict:** worked. The most important moment came early: the newest version "existed on Maven
+Central" and still couldn't run on our platform. Checking that a dependency exists isn't enough.
+Check what it was built against.

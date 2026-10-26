@@ -63,8 +63,14 @@ curl http://localhost:8080/actuator/health      # {"status":"UP"}
 | `./mvnw test` | Unit and integration tests |
 | `./mvnw verify` | Tests and the JaCoCo coverage gate. The HTML report is in `target/site/jacoco/index.html` |
 | `docker compose run --rm test` | The same tests, inside Docker (no JDK needed) |
+| `./mvnw test -Dtest=RunCucumberTest` | Only the Cucumber acceptance scenarios (`src/test/resources/features`), over HTTP against the running app. The report is in `target/cucumber-report.html` |
 
 | `./mvnw test-compile org.pitest:pitest-maven:mutationCoverage` | Mutation testing of the service layer. The report is in `target/pit-reports/index.html` |
+
+**Acceptance scenarios (Cucumber).** Every business rule is also written as a Gherkin scenario in
+`src/test/resources/features`. They run with `mvn verify`, through real HTTP against the whole app
+on a random port. Each scenario is tagged with the `test-matrix.md` row it covers (`@row-1` to
+`@row-35`), and the AI summary scenarios use a scripted model, never OpenAI.
 
 The three tests in `RetroflowBusinessRulesTest` come from the previous vendor. **Do not change them
 to make them pass.** `ArchitectureTest` enforces the layering: controllers don't use repositories
