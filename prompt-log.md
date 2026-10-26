@@ -1169,8 +1169,14 @@ a small task to a fresh session without explaining anything.
   so a stale kit shows up in review. The standards owner (the Guild) owns the hosted server and the
   rules. The team lead owns `TEAM-KIT.md`.
 
-**Verdict:** worked. The break test and the handover each found a real gap within minutes. We
-would never have found them by reading our own config.
+- **One more gap, found on PR #6 itself:** `test-guardrail` showed **"skipping"**. `ci.yml` only ran
+  on `pull_request` for PRs into `main`/`master`, and our PRs are stacked on other branches, so only the
+  push run happened, where the job skips itself. CI now runs on PRs into any branch. On the next
+  push, the job ran on the `pull_request` event and passed (this PR changes no existing test).
+  Lesson: check that a new check actually *ran*, not only that nothing is red.
+
+**Verdict:** worked. The break test, the handover and the PR itself each found a real gap within
+minutes. We would never have found them by reading our own config.
 
 ---
 
