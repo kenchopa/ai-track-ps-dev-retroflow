@@ -31,13 +31,17 @@ public class OpenAiConfig {
                               @Value("${retroflow.summary.temperature}") double temperature,
                               @Value("${OPENAI_API_KEY:}") String apiKey,
                               @Value("${retroflow.summary.prompt}") Resource prompt) throws IOException {
+        var settings = new OpenAiSummaryModel.Settings(model, temperature, apiKey,
+                prompt.getContentAsString(StandardCharsets.UTF_8));
+        return new OpenAiSummaryModel(restClient(builder, baseUrl, timeout), json, settings);
+    }
+
+    /** The HTTP client with connect and read timeouts; shared with the timeout test. */
+    static RestClient restClient(RestClient.Builder builder, String baseUrl, Duration timeout) {
         JdkClientHttpRequestFactory requests = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(timeout).build());
         requests.setReadTimeout(timeout);
-        RestClient client = builder.baseUrl(baseUrl).requestFactory(requests).build();
-        var settings = new OpenAiSummaryModel.Settings(model, temperature, apiKey,
-                prompt.getContentAsString(StandardCharsets.UTF_8));
-        return new OpenAiSummaryModel(client, json, settings);
+        return builder.baseUrl(baseUrl).requestFactory(requests).build();
     }
 
 }

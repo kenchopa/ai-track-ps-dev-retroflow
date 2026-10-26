@@ -1,6 +1,7 @@
 package com.stackcraft.retroflow.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import com.stackcraft.retroflow.exception.SummaryUnavailableException;
 import com.stackcraft.retroflow.exception.SummaryUnavailableException.Reason;
 import com.stackcraft.retroflow.service.SummaryModel;
@@ -12,7 +13,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+
+
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +43,8 @@ class OpenAiSummaryModelTest {
     private static final String BASE_URL = "https://openai.test/v1";
     private static final String FAKE_KEY = "test-key-not-real";
     private static final String MODEL = "gpt-test";
+    private static final Duration SHORT_TIMEOUT = Duration.ofMillis(200);
+    private static final Duration SLOW_ANSWER = Duration.ofSeconds(2);
     private static final Long RETRO_ID = 12L;
     private static final String ANSWER = "{\"wentWell\": [], \"needsImprovement\": [], \"openActionItems\": []}";
     private static final SummaryModel.Input INPUT = new SummaryModel.Input(RETRO_ID, "Sprint 1",
@@ -111,6 +118,39 @@ class OpenAiSummaryModelTest {
                 .isExactlyInstanceOf(SummaryUnavailableException.class)
                 .hasMessage("Retrospective " + RETRO_ID + ": the summary took too long, try again later")
                 .extracting("reason").isEqualTo(Reason.TIMEOUT);
+    }
+
+    @Test
+    void summarise_whenRealHttpClientTimesOut_throwsTimeout() throws Exception {
+        // Arrange: a local server that answers after 2 seconds, and the production HTTP client with a 200 ms timeout
+        HttpServer slow = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        slow.createContext("/v1/chat/completions", exchange -> {
+            sleepQuietly(SLOW_ANSWER);
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        slow.start();
+        String baseUrl = "http://localhost:" + slow.getAddress().getPort() + "/v1";
+        var settings = new OpenAiSummaryModel.Settings(MODEL, 0.2, FAKE_KEY, "prompt");
+        var model = new OpenAiSummaryModel(OpenAiConfig.restClient(RestClient.builder(), baseUrl, SHORT_TIMEOUT),
+                new ObjectMapper(), settings);
+
+        // Act & Assert
+        try {
+            assertThatThrownBy(() -> model.summarise(INPUT))
+                    .isExactlyInstanceOf(SummaryUnavailableException.class)
+                    .extracting("reason").isEqualTo(Reason.TIMEOUT);
+        } finally {
+            slow.stop(0);
+        }
+    }
+
+    private static void sleepQuietly(Duration duration) {
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @ParameterizedTest(name = "finish_reason {0}, refusal {1}")

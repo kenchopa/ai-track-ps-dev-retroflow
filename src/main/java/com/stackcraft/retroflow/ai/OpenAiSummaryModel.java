@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * {@link SummaryModel} on OpenAI's Chat Completions API with structured
@@ -89,7 +90,7 @@ public class OpenAiSummaryModel implements SummaryModel {
     /** Timeout, rate limit or any other provider failure; logged without the provider's message. */
     private SummaryUnavailableException failure(Long id, RestClientException error) {
         Reason reason = Reason.PROVIDER_ERROR;
-        String detail = error.getClass().getSimpleName();
+        String detail = causes(error);
         if (error instanceof RestClientResponseException response) {
             int status = response.getStatusCode().value();
             reason = status == TOO_MANY_REQUESTS ? Reason.RATE_LIMITED : Reason.PROVIDER_ERROR;
@@ -128,9 +129,20 @@ public class OpenAiSummaryModel implements SummaryModel {
                 usage.path("completion_tokens").asLong());
     }
 
+    /** "ResourceAccessException < HttpTimeoutException": exception types only, never messages. */
+    private static String causes(Throwable error) {
+        StringBuilder chain = new StringBuilder(error.getClass().getSimpleName());
+        for (Throwable cause = error.getCause(); cause != null; cause = cause.getCause()) {
+            chain.append(" < ").append(cause.getClass().getSimpleName());
+        }
+        return chain.toString();
+    }
+
     private static boolean isTimeout(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-            if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+            // The JDK client's read timeout arrives as an IOException caused by a concurrent TimeoutException.
+            if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException
+                    || cause instanceof TimeoutException) {
                 return true;
             }
         }
