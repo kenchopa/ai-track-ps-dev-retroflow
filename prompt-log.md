@@ -519,8 +519,10 @@ Write it to audit/audit-findings.md. Don't change any code.
 2 open questions for the Guild, and 1 security issue outside the standards.
 - **C1 §2.1:** `FeedbackItem.java:79` throws `"Use ActionItem for feedback of type ACTION_ITEM"`,
   which leaves the service layer unparseable. It can't be reached through the API today.
-- **C2 §1.4:** `@Autowired` fields in 6 of our test classes plus the vendor test. Production code is
-  clean (ArchUnit checks it). ⚖️ Fixing it means editing existing tests, which step 3 forbids.
+- **C2 §1.4:** `@Autowired` fields in test code. Production code is clean (ArchUnit checks it).
+  ⚖️ Fixing it means editing existing tests, which step 3 forbids. *(Corrected in step 4: we first
+  listed 6 classes plus the vendor test, but 5 of those were `@Autowired` constructors. Only
+  `ControllerContractTest:21` and the vendor test really use field injection.)*
 - **C3 §4.1 (disputed):** "author is not a member" returns 400. It depends on stored state, like our
   409s do. ⚖️ This is a team decision (F1), not the AI's.
 - **Major:** enum values are validated in the service, not at the boundary (§5.2); the vendor-facing
@@ -574,3 +576,34 @@ wrong, which section) and commit it on its own. Finish with `mvn verify` and `gi
 **Verdict:** worked, but only 1 of the 3 Criticals could be fixed inside the rules of this step.
 The other two are real disagreements (a rule vs. a vendor file, and a rule the standard doesn't
 define), and an agent "fixing" them would just be picking a side for us.
+
+### Step 4: draft the `stackcraft-audit` skill
+
+**Prompt**
+
+```
+Turn what worked in our step 2 audit into a skill: .claude/skills/stackcraft-audit/SKILL.md,
+under 40 lines, in the name/description/instructions format from block3.md. It must make the AI
+read the standards through the ai-track-standards MCP server (never from memory), go section by
+section, and write audit/audit-findings.md in the same structure as ours. Put the mechanical
+checks (class length, @Autowired fields, catch blocks, query concatenation, secrets in config)
+in a small script next to it, and tell the AI to open every hit before reporting it.
+Spend most of the care on the description: it's what decides whether the skill gets loaded.
+```
+
+**Result**
+- `.claude/skills/stackcraft-audit/SKILL.md` (38 lines) and `checks.sh`.
+- `.claude/` is in this machine's global gitignore, so the skill is added with `git add -f`.
+- **The script caught a mistake in our own audit.** C2 listed 6 test classes with field
+  injection, but 5 of them are `@Autowired` **constructors**. The audit had trusted a bare
+  `grep "@Autowired"` without opening the lines. The script looks at the line after the annotation
+  and found only `ControllerContractTest:21` and the vendor test. C2 is corrected in
+  `audit/audit-findings.md`, with a note.
+- **What we edited by hand:** the description. It now names the triggers ("audit", "check
+  compliance", "violations of our coding standards", "before a fix round") instead of just "audits
+  code". It also says what the output is, so the AI can tell this skill apart from
+  `stackcraft-tests`.
+
+**Verdict:** worked, and it was humbling. Writing the mechanical check down as a script proved
+one of our own "checked" findings wrong. Exactly the habit the skill now forces ("open every hit
+before you report it").

@@ -15,7 +15,7 @@
 | # | Severity | Section | Where | Status |
 |---|---|---|---|---|
 | C1 | Critical | §2.1 Exception message format | `entity/FeedbackItem.java:79` | ✅ |
-| C2 | Critical | §1.4 Constructor injection only | 6 test classes (+ the vendor test) | ⚖️ |
+| C2 | Critical | §1.4 Constructor injection only | `ControllerContractTest.java:21` (+ the vendor test) | ⚖️ |
 | C3 | Critical (disputed) | §4.1 HTTP status codes | `service/ServiceValidation.java:49` | ⚖️ |
 | M1 | Major | §5.2 Validate all input at the boundary | 3 request records + `ActionItemController.java:62` | ➖ |
 | M2 | Major | §6.1 JavaDoc (business-rule method) | `service/RetrospectiveService.java:45-53` | ✅ |
@@ -57,35 +57,35 @@ API contract. Step 3 only covers Critical findings, so these are listed for the 
 
 ### C2 · §1.4: field injection in test classes ⚖️
 
-- **Where:** `@Autowired` on fields in
-  - `controller/ControllerContractTest.java:21`
-  - `service/ActionItemRulesTest.java:36`
-  - `service/RetrospectiveRulesTest.java:34`
-  - `service/TeamRulesTest.java:34`
-  - `service/ServiceHappyPathTest.java:35`
-  - `service/FeedbackItemRulesTest.java:38`
-  - the vendor's `RetroflowBusinessRulesTest.java:30,33`
+- **Where:** `@Autowired` on a **field** in
+  - `controller/ControllerContractTest.java:21-22`: `protected MockMvc mvc;`, the base class of all
+    4 contract test classes
+  - the vendor's `RetroflowBusinessRulesTest.java:30-34` (`teamService`, `retrospectiveService`)
 
-  All of these are under `src/test`. Production code is clean: `ArchitectureTest.noFieldInjection`
+  Both are under `src/test`. Production code is clean: `ArchitectureTest.noFieldInjection`
   enforces it there, with `DoNotIncludeTests`.
+- **Correction (step 4):** the first version of this finding also listed `ActionItemRulesTest:36`,
+  `RetrospectiveRulesTest:34`, `TeamRulesTest:34`, `ServiceHappyPathTest:35` and
+  `FeedbackItemRulesTest:38`. Those are `@Autowired` **constructors**, which is constructor injection
+  and compliant. The audit had trusted a bare `grep "@Autowired"` without opening the lines. The
+  skill's `checks.sh` looks at the line after the annotation and caught the mistake.
 - **Standard (§1.4, Critical):** *"Field injection (`@Autowired` on a field) is prohibited.
   Constructor injection must be used for all Spring-managed dependencies."*
 - **Why it matters:** the standard gives the reason: *"Field injection makes testing impossible and
   hides dependencies."* That reason is about production beans, and these are the tests themselves.
-  Read literally, the rule still applies.
-- **Correct implementation:** constructor injection in JUnit 5:
+  Read literally, the rule still applies. Our own service tests already show the compliant way.
+- **Correct implementation:** constructor injection, as in `TeamRulesTest`:
   ```java
-  @SpringBootTest
-  @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-  class TeamRulesTest {
-      private final TeamService teamService;
-      TeamRulesTest(TeamService teamService) { this.teamService = teamService; }
+  abstract class ControllerContractTest {
+      protected final MockMvc mvc;
+      protected ControllerContractTest(MockMvc mvc) { this.mvc = mvc; }   // subclasses: @Autowired constructor
   }
   ```
 - **Why not fixed in step 3:** two mandates conflict. Step 3 says *"existing tests stay
   untouched"*, and the house rules say `RetroflowBusinessRulesTest` is never edited. The vendor test
-  could never comply anyway. **For the team:** does §1.4 apply to `src/test`? If yes, convert our 6
-  classes in a separate change, extend the ArchUnit rule to the tests, and exclude the vendor test.
+  could never comply anyway. **For the team:** does §1.4 apply to `src/test`? If yes, convert
+  `ControllerContractTest` (and its 4 subclasses' constructors) in a separate change, extend the
+  ArchUnit rule to the tests, and exclude the vendor test.
 
 ### C3 · §4.1: "author is not a member" returns 400; is that a business rule? ⚖️
 
