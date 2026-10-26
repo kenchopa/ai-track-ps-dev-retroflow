@@ -1,12 +1,42 @@
 # retroflow-decisions: our own MCP server
 
-A small local MCP server that makes RetroFlow's `decisions.md` readable for an AI tool. It has the
-same two tools as the hosted `ai-track-standards` server:
+A small local MCP server for RetroFlow. It serves our own `decisions.md`, like the hosted
+`ai-track-standards` server serves the standards, and it can also **do** something: check the code.
 
 | Tool | What it does |
 |---|---|
 | `list_documents` | Lists the documents it serves (today: `decisions`) |
 | `read_document` | Returns the current text of one document by id |
+| `check_standards` | Runs mechanical StackCraft checks on the code, **without a model** (bonus challenge 1) |
+
+## check_standards
+
+`check_standards(path = "src", rules = all)` checks six rules in plain code:
+
+| Rule | What it checks |
+|---|---|
+| §1.2 | class files over 200 lines |
+| §1.3 | methods over 20 lines, blank lines and comments excluded |
+| §1.4 | `@Autowired`/`@Inject` on a field (constructors are fine) |
+| §5.1 | hard-coded secrets in `.properties`/`.yml`/`.java` (empty values and `${ENV}` are fine) |
+| §5.3 | string concatenation inside `@Query`/`createQuery` |
+| §6.1 | public methods of `@Service` classes without JavaDoc, a description, `@param` or `@return` |
+
+- **Every finding** has `file`, `line`, `rule` (e.g. `§1.4`), and the `title` and `severity` from
+  the standards document.
+- **The severities are not hard-coded.** They're read live from the hosted `ai-track-standards`
+  server (`standards.js`), from each section's "Violation severity" line. If the document changes,
+  the severities change with it. If a rule disappears from the document, the report warns that its
+  findings may be obsolete. If the server can't be reached, the checks still run, with severity
+  `unknown` and a warning.
+- **Bad input is an error the AI can read, not a crash:** an unknown rule, a path that doesn't
+  exist, or a path outside the repository (`../../`, `/etc`, or a symlink that points out).
+- **Java is sanitised before checking:** comments and string contents are blanked out and line
+  numbers are kept, so a `{` inside a string can't break the brace counting.
+- **Known gaps:** `@throws` isn't checked (it needs a compiler to know what a method throws), and
+  §6.1 only looks at `@Service` classes, not a `@Component` in the service package. Anything that
+  needs judgement (naming, status codes, validation at the boundary) is left to the AI. The report
+  says so in `notChecked`.
 
 It is built with the official MCP SDK for Node.js (`@modelcontextprotocol/sdk` 1.32.1) and the
 **stdio** transport: the AI tool starts it as a child process, with one client at a time and no
@@ -17,7 +47,7 @@ network. It isn't part of the RetroFlow application, so it lives outside `src/`.
 ```bash
 cd mcp-decisions
 npm ci        # Node 20+
-npm test      # starts the server as an MCP client would, and checks both tools
+npm test      # 14 tests: every rule on fixtures, bad input, and the server over stdio
 ```
 
 ## Connect your tool

@@ -864,3 +864,81 @@ ActionItem, and can an action item still be completed after its retrospective is
 
 **Verdict:** worked. The useful part wasn't the code (about 70 lines). It was seeing the same AI go
 from "I won't guess" to quoting E1 and F6 with their caveats.
+
+---
+---
+
+# Prompt log: Bonus module (`bonus-kengy`)
+
+Branch `bonus-kengy`, on top of `block3-mcp-server` (challenge 1 extends that server). Model
+provider for challenges 2 and 3: **OpenAI**, with the key only in the `OPENAI_API_KEY`
+environment variable.
+
+## Challenge 1: an MCP server that does something
+
+**Prompt**
+
+```
+Extend our mcp-decisions server with a check_standards tool. Parameters: a path (relative to the
+repo, validated: must exist and stay inside the repo, symlinks included) and optional rule ids
+(validated against the rules you implement). Check at least these rules in plain code, no model:
+§1.2 class length, §1.3 method length, §1.4 field injection, §5.1 hard-coded secrets, §5.3 query
+concatenation, §6.1 JavaDoc on service methods. Every finding: file, line, rule, severity. Read the
+severities and titles from the hosted ai-track-standards server instead of hard-coding them, and say
+what happens when that document changes or can't be reached. Bad input returns a clear MCP error, not
+a stack trace. Blank out comments and string contents before brace counting (remember the Block 3
+"{ in a string" false positive). Add tests with fixtures, and prove the output is identical on two runs.
+```
+
+**Result**
+- `check_standards` in `mcp-decisions/` (`checks.js`, `java-source.js`, `standards.js`), with 14
+  `node:test` tests. On RetroFlow it reports **8 findings**: the 3 field injections (C2) and the 5
+  service methods without a description (m1). Exactly the mechanical part of our Block 3 audit, and
+  no `{`-in-a-string false positive anymore.
+- **Same input twice:** the SHA-256 of the output is identical (`a8251c02…`). There are no
+  timestamps or random order in it, because the findings are sorted by severity, file and line.
+- **`../../`** returns *"Path "../../" is outside the RetroFlow repository. check_standards only
+  reads files inside it."* So do `/etc` and a symlink inside the repo pointing at `/etc` (tested).
+  Unknown rule `4.1` returns *"Unknown rule "4.1". Rules this tool checks: 1.2, 1.3, 1.4, 5.1,
+  5.3, 6.1."*
+
+**Then check it**
+
+| | Audit **with** `check_standards` (fresh session) | Audit **without** it (Block 3 skill run) |
+|---|---|---|
+| Field injection, JavaDoc | the same 8 hits, listed by the tool, then opened one by one | found by reading, with 2 stale line numbers after fix 2 |
+| Naming, AAA comments, magic values, 400 vs 409, validation at the boundary | ✅ from the AI | ✅ from the AI |
+| Gaps in the tool itself | it noticed that §6.1 skips `EntityLookup` (a `@Component`) | n/a |
+| Cost of the session | $1.06 | $2.15 (Block 3 swap run) |
+
+- **What the tool finds that the AI misses:** nothing new on today's code, but it is *always* complete
+  and identical. The AI got line numbers wrong once and missed `TeamControllerTest:62` in Block 3.
+- **What the AI finds that the tool can't:** everything that needs judgement. Is "not a member" a
+  business rule? Is a test name meaningful? Does §1.4 apply to tests at all?
+- **Why identical output matters:** you can diff it, gate CI on it, and trust that a change in the
+  report means a change in the code. Use code for anything that is a pattern (lengths, annotations,
+  strings), and a model for anything that needs reading the intent.
+- **Who decides what an MCP server may read?** The server does, not the AI and not the user's
+  prompt. The tool resolves `realpath` and refuses anything outside the repo. An MCP server runs
+  with *your* permissions, so a tool that takes a path without that check is a file-read hole for
+  any prompt that reaches it.
+
+**Two things that went wrong**
+1. **The first audit session did not use the tool.** It loaded our `stackcraft-audit` skill, and
+   the skill said "run checks.sh". The skill's explicit instruction beat the tool's description
+   ("use it first when asked to audit"). After we changed the skill to prefer `check_standards`
+   when it's available, a new session called it as its 5th step. Lesson: the instructions you put
+   in the repo outrank the tool descriptions.
+2. **That same session flagged our test fixtures under §5.1.** They committed a fake
+   `mail.password=hunter2` and an `apiKey = "not-a-real-secret"`, and §5.1 includes git history.
+   The §5.1 fixtures are now written to a temp folder at test time. The branch wasn't pushed yet,
+   so we amended the commit, and `git log -S hunter2` is empty.
+
+**Level up (done):** severities and titles come from the hosted document at runtime, and only the
+checks are code. **When the document changes:** a new severity shows up on the next run without a
+release. A removed section gives a warning. A *new* rule needs a new check in code, and nothing
+tells us that automatically. Next step: compare the section list with the rules the tool knows and
+report "§x has no check".
+
+**Verdict:** worked, after fixing the skill. The most useful moment was the AI reviewing the tool,
+and the tool keeping the AI honest.
