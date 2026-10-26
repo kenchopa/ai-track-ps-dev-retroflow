@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    # This fork's default branch is master; the course says main. Cover both.
+    branches: [main, master]
+
+# Least privilege by default; the job below widens only what it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # only used to post the coverage comment
+    steps:
+      # Actions are pinned to a full commit SHA: a tag can be moved to malicious code, a SHA cannot.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # Compiles, runs the tests and fails below the JaCoCo thresholds in pom.xml.
+      - name: Build, test and check coverage
+        run: mvn -B -ntp verify
+
+      - name: Compute coverage
+        id: coverage
+        if: always() && hashFiles('target/site/jacoco/jacoco.csv') != ''
+        run: |
+          # jacoco.csv columns: 8 = LINE_MISSED, 9 = LINE_COVERED, 6 = BRANCH_MISSED, 7 = BRANCH_COVERED
+          read -r line branch < <(LC_ALL=C awk -F, 'NR > 1 { lm += $8; lc += $9; bm += $6; bc += $7 }
+            END { printf "%.1f %.1f\n", (lm + lc) ? 100 * lc / (lm + lc) : 0, (bm + bc) ? 100 * bc / (bm + bc) : 0 }' \
+            target/site/jacoco/jacoco.csv)
+          echo "line=$line" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "### Coverage: ${line}% lines, ${branch}% branches (minimum 80% / 70%)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Plain `pull_request` (never `pull_request_target`): PRs from forks get a read-only
+      # token and no secrets, so their code can't abuse this job. The comment is skipped for them.
+      - name: Comment coverage on the pull request
+        if: >-
+          always() && github.event_name == 'pull_request'
+          && steps.coverage.outputs.line != ''
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LINE: ${{ steps.coverage.outputs.line }}
+          BRANCH: ${{ steps.coverage.outputs.branch }}
+        run: |
+          body="**Test coverage:** ${LINE}% lines, ${BRANCH}% branches (minimum 80% / 70%)"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" --edit-last --create-if-none
+
+      - name: Upload coverage report
+        if: always() && hashFiles('target/site/jacoco/index.html') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 7

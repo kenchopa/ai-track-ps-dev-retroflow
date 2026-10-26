@@ -1,0 +1,39 @@
+services:
+  # API: docker compose up --build
+  app:
+    build:
+      context: .
+      target: runtime
+    image: retroflow:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # H2 console binds to localhost by default; allow access from the host browser.
+      SPRING_H2_CONSOLE_SETTINGS_WEB_ALLOW_OTHERS: "true"
+    restart: unless-stopped
+
+  # Tests: docker compose run --rm test
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    volumes:
+      - m2:/root/.m2
+
+  # Dev loop with live source: docker compose run --rm --service-ports dev
+  dev:
+    image: maven:3.9-eclipse-temurin-21
+    profiles: ["dev"]
+    working_dir: /workspace
+    command: ["mvn", "-B", "-Dmaven.test.skip=true", "spring-boot:run"]
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_H2_CONSOLE_SETTINGS_WEB_ALLOW_OTHERS: "true"
+    volumes:
+      - .:/workspace
+      - m2:/root/.m2
+
+volumes:
+  m2:

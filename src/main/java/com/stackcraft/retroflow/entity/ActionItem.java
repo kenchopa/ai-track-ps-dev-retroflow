@@ -1,37 +1,59 @@
 package com.stackcraft.retroflow.entity;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.validation.constraints.NotNull;
 
 /**
- * STUB — left behind by the previous vendor.
+ * A feedback item of type ACTION_ITEM that also tracks a priority and whether
+ * it has been completed.
  *
- * An ActionItem is a special kind of FeedbackItem (type ACTION_ITEM) that
- * additionally tracks a priority (LOW/MEDIUM/HIGH) and a boolean
- * completed flag. Action items can be marked completed, but a completed
- * action item can never be uncompleted. They must also be retrievable
- * filtered by priority and by completed status.
+ * <p>Stored in the {@code feedback_item} table (SINGLE_TABLE inheritance), so
+ * {@code priority} and {@code completed} are nullable columns; their
+ * presence is guaranteed by validation and by this class, not by the schema.
  *
- * This class is not yet related to FeedbackItem — deciding and
- * implementing the inheritance strategy between the two (single table,
- * joined, or a composition approach) is part of Block 1. Nothing has
- * been decided yet; this is deliberately just a bare stub.
+ * <p>Completion is one-way: there is {@link #markCompleted()} but no setter,
+ * so an item cannot be uncompleted by accident (decisions.md E5). Whether a
+ * transition is allowed is checked by the service layer.
  */
 @Entity
-public class ActionItem {
+@DiscriminatorValue("ACTION")
+public class ActionItem extends FeedbackItem {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", length = 10)
+    private Priority priority;
 
-    public Long getId() {
-        return id;
+    @Column(name = "completed")
+    private boolean completed;
+
+    protected ActionItem() {
+        // required by JPA
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public ActionItem(Retrospective retrospective, String content, Priority priority, String author) {
+        super(retrospective, content, author);
+        this.priority = priority;
+    }
+
+    public Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Priority priority) {
+        this.priority = priority;
+    }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void markCompleted() {
+        this.completed = true;
     }
 
 }
