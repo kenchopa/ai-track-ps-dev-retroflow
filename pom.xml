@@ -22,6 +22,9 @@
         <jacoco.version>0.8.15</jacoco.version>
         <jacoco.line.minimum>0.80</jacoco.line.minimum>
         <jacoco.branch.minimum>0.70</jacoco.branch.minimum>
+        <pitest.version>1.30.1</pitest.version>
+        <pitest.junit5.version>1.2.3</pitest.junit5.version>
+        <archunit.version>1.5.1</archunit.version>
     </properties>
 
     <dependencies>
@@ -49,6 +52,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -107,6 +116,36 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- Mutation testing, run on demand (not part of `verify`, it is slow):
+                 ./mvnw test-compile org.pitest:pitest-maven:mutationCoverage
+                 Report: target/pit-reports/index.html -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>${pitest.junit5.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>com.stackcraft.retroflow.service.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.stackcraft.retroflow.service.*Test</param>
+                        <param>com.stackcraft.retroflow.RetroflowBusinessRulesTest</param>
+                    </targetTests>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>CSV</param>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                    <threads>2</threads>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -4,10 +4,9 @@ RetroFlow is the backend REST API for StackCraft's internal retrospective tool. 
 retrospectives, the feedback given in them and the action items that come out of them, so there
 is finally one place that shows whether those action items were ever resolved.
 
-> **Status (end of Block 1):** the entity model, the endpoints for teams and retrospectives, the
-> validation and the error handling are in place. The service methods are still stubs, so a
-> *valid* request to a team or retrospective endpoint returns `500` until Block 2 implements the
-> business rules. Invalid requests already return `400`.
+> **Status (end of Block 2):** every endpoint from the brief works and every business rule is
+> enforced in the service layer. 89 tests run: the vendor tests, one test per `test-matrix.md` row,
+> web contract tests and architecture rules. Coverage is above the gate.
 
 ## Tech stack
 
@@ -57,8 +56,11 @@ curl http://localhost:8080/actuator/health      # {"status":"UP"}
 | `./mvnw verify` | Tests and the JaCoCo coverage gate. The HTML report is in `target/site/jacoco/index.html` |
 | `docker compose run --rm test` | The same tests, inside Docker (no JDK needed) |
 
-The three tests in `RetroflowBusinessRulesTest` come from the previous vendor. They fail until
-Block 2 implements the service layer. **Do not change them to make them pass.**
+| `./mvnw test-compile org.pitest:pitest-maven:mutationCoverage` | Mutation testing of the service layer. The report is in `target/pit-reports/index.html` |
+
+The three tests in `RetroflowBusinessRulesTest` come from the previous vendor. **Do not change them
+to make them pass.** `ArchitectureTest` enforces the layering: controllers don't use repositories
+or expose entities, services don't know the web layer, and there is no field injection.
 
 CI (`.github/workflows/ci.yml`) runs `mvn verify` on every push and on pull requests. On a pull
 request it also comments the coverage.
@@ -80,8 +82,7 @@ Every error has the same shape (StackCraft standard 2.2):
 ```
 
 `400` = invalid input, `404` = unknown id, `409` = business rule violation.
-The full contract, including the endpoints for feedback and action items that are planned for
-Block 2, is in [`decisions.md`](decisions.md#endpoint-contract).
+The full contract with every error code is in [`decisions.md`](decisions.md#endpoint-contract).
 
 | Method | Path | Success |
 | --- | --- | --- |
@@ -92,6 +93,15 @@ Block 2, is in [`decisions.md`](decisions.md#endpoint-contract).
 | GET | `/api/teams/{teamId}/retrospectives` | 200 |
 | GET | `/api/retrospectives/{id}` | 200 |
 | PUT | `/api/retrospectives/{id}/close` | 200 |
+| POST | `/api/retrospectives/{id}/feedback-items` | 201 |
+| GET | `/api/retrospectives/{id}/feedback-items` | 200 |
+| PUT | `/api/feedback-items/{id}` | 200 |
+| DELETE | `/api/feedback-items/{id}` | 204 |
+| POST | `/api/retrospectives/{id}/action-items` | 201 |
+| PUT | `/api/action-items/{id}` | 200 |
+| PUT | `/api/action-items/{id}/complete` | 200 |
+| PUT | `/api/action-items/{id}/uncomplete` | 200, or 409 if completed |
+| GET | `/api/teams/{teamId}/action-items?priority=HIGH&completed=false` | 200 |
 
 Try it by hand:
 
@@ -111,8 +121,17 @@ curl -i -X POST localhost:8080/api/teams/1/retrospectives \
   -H 'Content-Type: application/json' \
   -d '{"title":"Sprint 1 Retro","date":"2026-10-26"}'
 
-# Close it
+# Add feedback and an action item (the author must be a team member)
+curl -i -X POST localhost:8080/api/retrospectives/1/feedback-items \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"Pairing worked well","type":"WENT_WELL","author":"Alice"}'
+curl -i -X POST localhost:8080/api/retrospectives/1/action-items \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"Fix the build","priority":"HIGH","author":"Bob"}'
+
+# Close it: from now on its feedback is frozen (409), but action items can still be completed
 curl -i -X PUT localhost:8080/api/retrospectives/1/close
+curl -i -X PUT localhost:8080/api/action-items/2/complete
 ```
 
 ## Project files
@@ -121,6 +140,7 @@ curl -i -X PUT localhost:8080/api/retrospectives/1/close
 | --- | --- |
 | `decisions.md` | Our interpretation of everything the brief leaves open |
 | `test-matrix.md` | One row per business rule and operation. Block 2 writes a test per row |
+| `prompt-log.md` | Every prompt of Block 2 with a one-line verdict |
 | `.github/copilot-instructions.md` | House rules the AI assistants read before every request (`CLAUDE.md` imports them) |
 
 The code uses layer-first packages under `com.stackcraft.retroflow` (`entity`, `repository`,
