@@ -6,8 +6,10 @@ import com.stackcraft.retroflow.entity.Retrospective;
 import com.stackcraft.retroflow.exception.InvalidInputException;
 import com.stackcraft.retroflow.exception.NotFoundException;
 import com.stackcraft.retroflow.exception.RetroflowException;
+import com.stackcraft.retroflow.exception.SummaryUnavailableException;
 import com.stackcraft.retroflow.repository.FeedbackItemRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,10 +34,13 @@ public class FeedbackItemService {
 
     private final FeedbackItemRepository feedbackItemRepository;
     private final EntityLookup lookup;
+    private final SummaryService summaryService;
 
-    public FeedbackItemService(FeedbackItemRepository feedbackItemRepository, EntityLookup lookup) {
+    public FeedbackItemService(FeedbackItemRepository feedbackItemRepository, EntityLookup lookup,
+                               SummaryService summaryService) {
         this.feedbackItemRepository = feedbackItemRepository;
         this.lookup = lookup;
+        this.summaryService = summaryService;
     }
 
     /**
@@ -101,6 +106,22 @@ public class FeedbackItemService {
         FeedbackItem item = lookup.feedbackItem(feedbackItemId);
         requireOpenForChange(item, "delete");
         feedbackItemRepository.delete(item);
+    }
+
+    /**
+     * Summarises the feedback of a CLOSED retrospective with a language model; see {@link SummaryService}.
+     * Runs outside a transaction, so no database connection waits for the model.
+     *
+     * @param retrospectiveId id of the retrospective
+     * @return what went well, what needs improvement and the open action items
+     * @throws NotFoundException            if the retrospective does not exist
+     * @throws RetroflowException           if it is still OPEN
+     * @throws InvalidInputException        if it has more items than a summary can take
+     * @throws SummaryUnavailableException  if the model fails, or its answer does not hold up
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public RetrospectiveSummary summarise(Long retrospectiveId) {
+        return summaryService.summarise(retrospectiveId);
     }
 
     private static FeedbackType parseType(String type) {

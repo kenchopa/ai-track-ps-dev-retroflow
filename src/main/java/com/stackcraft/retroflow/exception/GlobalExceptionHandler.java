@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String RETRY_AFTER_SECONDS = "60";
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(NotFoundException ex) {
@@ -43,6 +45,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RetroflowException.class)
     public ResponseEntity<ApiError> handleBusinessRule(RetroflowException ex) {
         return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * The summary model failed: 504 timeout, 503 busy or not configured (with Retry-After when busy),
+     * 502 failed or unusable answer. The message never contains provider details (4.2).
+     */
+    @ExceptionHandler(SummaryUnavailableException.class)
+    public ResponseEntity<ApiError> handleSummaryUnavailable(SummaryUnavailableException ex) {
+        HttpStatus status = switch (ex.getReason()) {
+            case TIMEOUT -> HttpStatus.GATEWAY_TIMEOUT;
+            case RATE_LIMITED, NOT_CONFIGURED -> HttpStatus.SERVICE_UNAVAILABLE;
+            case PROVIDER_ERROR, INVALID_ANSWER -> HttpStatus.BAD_GATEWAY;
+        };
+        ResponseEntity<ApiError> response = error(status, ex.getMessage());
+        if (ex.getReason() == SummaryUnavailableException.Reason.RATE_LIMITED) {
+            return ResponseEntity.status(status).header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS).body(response.getBody());
+        }
+        return response;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
