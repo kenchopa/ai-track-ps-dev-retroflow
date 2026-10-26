@@ -495,3 +495,118 @@ entity (decision G3). The standard says nothing about this case, and run C flagg
 know" followed by a plausible wrong default, or an agent that quietly grounds itself in whatever
 file it finds. With the connector you get the real section numbers, quotes you can check, and a
 list of what the document leaves open.
+
+## Pair BC (`block3-review`)
+
+### Step 2: the review, with proof
+
+**Prompt**
+
+```
+You are the senior developer reviewing RetroFlow before it goes to staging. First read StackCraft's
+standards through the ai-track-standards MCP server: read_document("stackcraft-coding") and
+read_document("stackcraft-qa"). Cite only section numbers you actually read there.
+Then review the codebase and retroflow-brief.md on four dimensions: security, API design, business
+rules and test quality. Do NOT change any code.
+Every finding needs proof: either a quoted line (file:line) or a command you ran plus its output.
+Start the app (Docker, port 18080) and check every business rule from the brief over HTTP, one
+operation at a time. "Cannot be modified or deleted" is separate operations: add, modify and delete,
+for feedback items AND action items.
+Give every finding a severity (Critical/High/Medium/Low, QA §4.2 definitions) and a fix.
+The brief says no authentication is required: don't report missing auth. Before you report an
+injection finding, show me the concatenated string. List the findings you dropped as false
+positives, and why.
+```
+
+**Result**
+- The MCP server was used for both documents: `stackcraft-coding` v3.1 and `stackcraft-qa` v2.0.
+  The quoted sections (coding §2.1, §2.2, §4.1, §4.2, §5.1, §5.3 and QA §1.1, §2.1, §2.2, §3.1,
+  §3.2, §4.2, §6.1, §6.2) were checked against `stackcraft-coding-standards.md`. There is no local
+  copy of the QA document, so those quotes come only from the server.
+- **Business rules over HTTP (running app, `retroflow-review:block3` on :18080):** all correct.
+
+  | Request | Response |
+  |---|---|
+  | 2nd OPEN retro | `409 Team 1: already has an open retrospective (1)` |
+  | close twice | `409 Retrospective 1: already closed` |
+  | `PUT …/reopen` | `404` |
+  | closed retro: add feedback / add action item | `409 … cannot add feedback to a closed retrospective` (both) |
+  | closed retro: modify feedback / delete feedback | `409 FeedbackItem 1: cannot modify …` / `cannot delete …` |
+  | closed retro: modify action item (both routes) / delete it | `409 ActionItem 2: cannot modify …` / `cannot delete …` |
+  | complete after close | `200 completed:true` (F6) |
+  | complete twice | `409 ActionItem 2: already completed` |
+  | uncomplete a completed item | `409 ActionItem 2: already completed, cannot be undone` |
+  | filter `priority=HIGH&completed=true` | `200 [the one item]` |
+
+- **Input:** 400s with meaningful messages for an empty member list, duplicate members, an unknown
+  type, an author who isn't a member, ACTION_ITEM through the feedback route, `priority=URGENT`,
+  `completed=maybe` and `/teams/abc`. One weak spot: a bad `date` only says
+  `Request -: malformed JSON or invalid field value`.
+- **Findings:** 2 must-fix (C1 the H2 console is open with an empty password via compose,
+  reproduced; C2 no HTTP-level test of any business rule, QA §1.1), 4 should-fix (race on add vs.
+  close, author spelling, vendor `isInstanceOf`, vendor fixed names) and 4 low. Details are in
+  `review/pre-staging-review.md`.
+- **`mvn -B verify` (Docker):** 89 tests, 0 failures, coverage gate met, BUILD SUCCESS.
+- **Dropped as false positives:**
+  - JPQL injection in `ActionItemRepository.findForTeam`: named parameters, nothing concatenated.
+  - Missing auth: out of scope according to the brief.
+  - "Tautological" `isNotNull()` in `ServiceHappyPathTest:65`: it's followed by three `isEqualTo` assertions.
+
+**Verdict:** worked. Starting the app was what made the difference. The H2 finding only shows up
+with the compose setting: the bare image refuses remote console access, so reading the code alone
+would have left it at "maybe". We still had to check the line numbers ourselves (the first draft
+cited the vendor test at :46/:59/:74, the real lines are :48/:60/:76).
+
+### Step 3: the review document
+
+**Prompt**
+
+```
+Turn the step 2 findings into review/pre-staging-review.md, a document we can send to the dev team:
+a 3-4 sentence summary plus one plain-language line a non-technical stakeholder can act on (QA §6.2),
+the critical issues (must fix before staging), the other issues (should fix / when time allows),
+at least 3 things done well, the false positives we dropped, what we did NOT check (QA §6.1), and a
+sign-off status BLOCKED / CONDITIONAL / APPROVED with the reason. Keep the proof column for every
+finding. Don't change any code.
+```
+
+**Result**
+- `review/pre-staging-review.md`: 2 must-fix, 4 should-fix, 4 low, 5 things done well, 3 false
+  positives, a scope section, and how we checked.
+- **Sign-off: CONDITIONAL.** No runtime defect: every rule held over HTTP. But C1 (an open database
+  console bypasses every rule) and C2 (QA §1.1, no test against a running instance) have to be fixed
+  before staging.
+- Why not BLOCKED: nothing is broken for users, and both fixes are small and clear (a config change
+  and one `RANDOM_PORT` test class). Why not APPROVED: QA §1.1 rates C2 Critical as a standards
+  violation, and C1 is a security exposure by QA §4.2's definition.
+
+**Verdict:** worked. For the showcase: false positive = "JPQL injection" (named parameters); real
+finding = the H2 console, reproduced with curl.
+
+### Step 4: draft the `stackcraft-tests` skill
+
+**Prompt**
+
+```
+Write .claude/skills/stackcraft-tests/SKILL.md (under 40 lines, frontmatter name + description) for
+writing and reviewing tests the StackCraft way. Base it on what worked today: Block 2 AC step 3
+(one test per matrix row, naming, AAA, exact assertions, prove the test can fail) and BC step 2
+(status AND body, no lone isNotNull, isInstanceOf on a hierarchy, a test against the running app).
+The skill must send the AI to the ai-track-standards MCP server (stackcraft-coding §3 and
+stackcraft-qa) instead of memory, and cite section numbers. Add a template test class next to it that
+shows the HTTP-level layout (QA §1.1), and prove the template compiles and passes before committing.
+Spend most of the care on the description: when should the AI load this skill?
+```
+
+**Result**
+- `.claude/skills/stackcraft-tests/SKILL.md`: 35 lines, with a section for writing and one for reviewing, plus "never" rules.
+- `template/BusinessRuleHttpTest.java`: a `RANDOM_PORT` + `TestRestTemplate` test for the
+  "one OPEN retro" rule, with a unique team name, Arrange/Act/Assert, and checks on both the status
+  and the `error` body. Proven: copied into `src/test` temporarily, then
+  `mvn test -Dtest=BusinessRuleHttpTest` gave `Tests run: 1, Failures: 0`. Removed again, and `git status` was clean.
+- The description names the triggers: adding tests for a fix, a business rule or an endpoint;
+  reviewing test quality; checking a suite against the QA standards.
+- Catch: `.claude/` is in the global gitignore on this machine, so the skill folder needs
+  `git add -f`. Without it, the skill would never have reached the other pair.
+
+**Verdict:** worked. The template does double duty: it's also the start of the fix for review finding C2.
