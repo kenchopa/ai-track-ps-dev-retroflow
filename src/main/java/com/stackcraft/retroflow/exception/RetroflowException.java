@@ -6,12 +6,8 @@ package com.stackcraft.retroflow.exception;
  * retrospective for a team, or uncompleting an already-completed action
  * item.
  *
- * Left as bare infrastructure by the previous vendor: the class exists so
- * the inherited test file compiles against it, but nothing yet throws it
- * with a real, specific message. Building the service layer that actually
- * enforces the business rules and throws this appropriately — plus a
- * global exception handler that maps it to a proper HTTP error response —
- * is part of Block 1 and Block 2.
+ * Mapped to HTTP 409 by the global exception handler. Resource-not-found
+ * failures use the more specific ResourceNotFoundException and HTTP 404.
  */
 public class RetroflowException extends RuntimeException {
 

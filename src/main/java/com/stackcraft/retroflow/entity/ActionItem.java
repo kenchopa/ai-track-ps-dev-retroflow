@@ -1,37 +1,62 @@
 package com.stackcraft.retroflow.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import com.stackcraft.retroflow.exception.RetroflowException;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 
-/**
- * STUB — left behind by the previous vendor.
- *
- * An ActionItem is a special kind of FeedbackItem (type ACTION_ITEM) that
- * additionally tracks a priority (LOW/MEDIUM/HIGH) and a boolean
- * completed flag. Action items can be marked completed, but a completed
- * action item can never be uncompleted. They must also be retrievable
- * filtered by priority and by completed status.
- *
- * This class is not yet related to FeedbackItem — deciding and
- * implementing the inheritance strategy between the two (single table,
- * joined, or a composition approach) is part of Block 1. Nothing has
- * been decided yet; this is deliberately just a bare stub.
- */
 @Entity
-public class ActionItem {
+@DiscriminatorValue("ACTION_ITEM")
+public class ActionItem extends FeedbackItem {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(length = 6)
+    private Priority priority;
 
-    public Long getId() {
-        return id;
+    @Column
+    private boolean completed = false;
+
+    public ActionItem() {
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public ActionItem(Retrospective retrospective, String content, Priority priority, String submittedBy) {
+        super(retrospective, content, submittedBy);
+        setPriority(priority);
     }
 
+    public ActionItem(Long id, long version, Retrospective retrospective, String content, String submittedBy,
+                      Priority priority, boolean completed) {
+        super(id, version, retrospective, content, submittedBy);
+        setPriority(priority);
+        setCompleted(completed);
+    }
+
+    @Override
+    public FeedbackType getType() {
+        return FeedbackType.ACTION_ITEM;
+    }
+
+    public Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Priority priority) {
+        requireEditable();
+        this.priority = priority;
+    }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void setCompleted(boolean completed) {
+        if (this.completed && !completed) {
+            throw new RetroflowException("ActionItem " + getId() + ": already completed, cannot be undone");
+        }
+        this.completed = completed;
+    }
+
+    public void complete() {
+        setCompleted(true);
+    }
 }
