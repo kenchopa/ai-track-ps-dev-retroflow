@@ -811,3 +811,56 @@ spending the time on the descriptions.
   - **BC:** the agent that read the standard found test-style issues. The agent that ran the
     app found an open database console. Grounding tells you what the rules say; running the app
     tells you what's actually broken.
+
+---
+
+## Finished early: our own MCP server (`block3-mcp-server`)
+
+**Prompt**
+
+```
+Build a minimal local MCP server in its own folder (mcp-decisions/, outside src/) that makes our
+decisions.md readable for an AI tool. Use the official MCP SDK for Node.js with the stdio
+transport, and the same two tools as the hosted server: list_documents and read_document.
+Check on npm that the exact versions you pin exist, and say which you checked. Only serve files
+from a fixed list: an id, never a path. Add a smoke test that talks to it as a real MCP client
+would. Register it in .mcp.json next to ai-track-standards.
+```
+
+**Result**
+- `mcp-decisions/server.js` (about 70 lines) and `smoke-test.js`. `npm test` reports
+  `2 tools, list, read, unknown id refused`. `read_document("../pom.xml")` is refused.
+- **Versions checked on npm:** `@modelcontextprotocol/sdk` **1.32.1** (2026-10-05). We passed on
+  1.32.2 because it was only 3 days old. `zod` was first pinned at 4.6.5, but **`npm audit` flagged
+  a high-severity advisory** (GHSA-mrhx-c7xc-m3w5, fixed in 4.6.6). Moved to **4.6.7**, and
+  `npm audit` now finds 0 vulnerabilities. "Check that it exists" isn't enough: check that it's
+  safe too.
+- Registered in `.mcp.json` as `retroflow-decisions` (stdio, `node mcp-decisions/server.js`).
+  `mcp-decisions` is added to `.dockerignore` so `node_modules` stays out of the image build context.
+
+**On vs. off.** The question can only be answered from `decisions.md`, so both runs used a fresh
+session in an empty folder, with no file or web tools:
+
+```
+In the RetroFlow project, which JPA inheritance strategy did our team choose for FeedbackItem and
+ActionItem, and can an action item still be completed after its retrospective is closed?
+```
+
+| Run | Answer |
+|---|---|
+| Off | "I can't answer that… I won't guess, because both answers are choices your team made". It listed the possible strategies and suggested connecting an MCP server. Honest, and useless. |
+| On (+ "read it with read_document first and quote the decision ids") | **E1** `SINGLE_TABLE` with discriminator `item_kind`, with our reasons and rejected alternatives. **F6**: yes, completing still works, but it's flagged "⚠️ confirm with the CTO" and listed under open questions. It even noticed that the whole file is still a "proposal" waiting for the team's ✅. |
+
+**Our own server vs. a hosted one: when would you use which?**
+- **Run your own (stdio, local)** when the source is in your repo or on your machine and changes
+  with your code (`decisions.md`, ADRs, a local schema). It also fits when the data may not leave
+  the machine, or when only one developer needs it. Nothing to host and no auth to set up, but every
+  developer has to run it.
+- **Connect to a hosted one (HTTP)** when many people or tools need the **same** source of truth
+  (company standards, a client's regulations), someone else owns and updates it, or it needs auth,
+  logging and versioning. That's what the `ai-track-standards` server is: everyone reads the same v3.1.
+- **At a client:** host their standards centrally, and run our own small servers locally for
+  project-specific notes.
+
+**Verdict:** worked. The useful part wasn't the code (about 70 lines). It was seeing the same AI go
+from "I won't guess" to quoting E1 and F6 with their caveats.

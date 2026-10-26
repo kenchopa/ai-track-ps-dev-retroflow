@@ -1,0 +1,19 @@
+{
+  "name": "retroflow-decisions-mcp",
+  "version": "1.0.0",
+  "description": "Local MCP server (stdio) that serves RetroFlow's decisions.md to an AI tool",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node smoke-test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.7"
+  }
+}
