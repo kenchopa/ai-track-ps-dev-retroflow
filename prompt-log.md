@@ -1089,3 +1089,103 @@ repo by its owner.
 
 **Verdict:** worked. The eval found two real prompt bugs in its first run. The more lasting lesson
 is that the judge and the tests around it need checking just as much as the feature.
+
+## Challenge 4: a setup a whole team can use
+
+**Prompt**
+
+```
+Build a team kit in the repo so a new colleague gets the same AI behaviour in under 5 minutes:
+the instructions file, our skills in the right folder, the MCP config so both servers connect
+without typing a command, ONE guardrail that is enforced (not requested): existing tests can't be
+changed, as a git pre-commit hook and as a Claude Code hook that blocks the edit. A second agent with
+a different job: a reviewer that can read and run but never edit, next to an implementer. A
+one-page TEAM-KIT.md. Then clone it fresh as a new colleague, try to break the guardrail, and hand
+a small task to a fresh session without explaining anything.
+```
+
+**Result** (`884dd53` and the follow-up commit)
+- **Guardrail:**
+  - `.githooks/pre-commit` refuses changed, deleted or renamed tests, but new ones are fine. Bypass on
+    purpose with `ALLOW_TEST_CHANGES="reason"`.
+  - `.claude/hooks/protect-tests.sh` blocks Edit/Write on a test that exists in `HEAD`.
+  - After the break test: a `test-guardrail` CI check on every PR.
+- **Agents:** `reviewer` (Read/Grep/Glob/Bash and read-only MCP tools, plus `disallowedTools:
+  Edit, Write, …`) and `implementer`.
+- **Shared config:** `.claude/settings.json` (MCP servers enabled, hook on) and `.vscode/mcp.json`
+  for Copilot users.
+- **Setup:** `scripts/setup-team-kit.sh` is one command. `TEAM-KIT.md` is one page.
+- **`.gitignore`:** it now shares `.claude/{settings.json,skills,agents,hooks}` and
+  `.vscode/mcp.json` explicitly, so the `git add -f` from Block 3 isn't needed anymore. Personal
+  settings and worktrees stay out.
+
+**Then check it**
+- **Fresh clone from GitHub, as a new colleague:** the setup script took 0.9 s and every line was
+  ok. **What was missing:** both MCP servers show *"Pending approval"*. That's by design: Claude
+  Code ignores a committed `enabledMcpjsonServers` until you accept the folder's **trust dialog**
+  (MCP docs, "Project server approvals and workspace trust"). A cloned repo can't approve the
+  commands it runs on your machine. "No command needed" is really "one trust click". `TEAM-KIT.md`
+  now says so.
+- **Trying to break the guardrail (in the scratch clone):**
+
+  | Attempt | Result |
+  |---|---|
+  | change / rename an existing test | refused |
+  | change a test resource in `src/test/resources` | refused |
+  | add a new test | allowed |
+  | `ALLOW_TEST_CHANGES="agreed with the team"` | allowed, reason printed |
+  | `git commit --no-verify` | **got through** |
+  | change a Node test in `mcp-decisions/test` | **got through** |
+  | a fresh Claude session asked to add a comment to `TeamRulesTest` | **Edit blocked** by the hook. It *was* allowed to `sed` via Bash, didn't try, and explained the options instead |
+
+  **Is that OK?** For a hook, yes: a client-side hook is a seatbelt, and anyone can skip it.
+  - So we closed the two holes: the hooks now cover `mcp-decisions/test`, and the server-side
+    `test-guardrail` CI job fails any PR that changes existing tests, unless the PR description says
+    `ALLOW_TEST_CHANGES: <reason>`.
+  - What's left: a direct push to an unprotected branch. Branch protection with the check as
+    required closes it, and the repo owner has to switch that on.
+  - The delete case wasn't run: a safety check stopped `git rm` in the test script. Delete
+    goes through the same `--diff-filter=MDR` as rename.
+- **Handing the kit over without explaining it:** a fresh session got *"Audit finding m1 … fix
+  that, and get the change reviewed"*.
+  - It fixed all 9 methods (including `EntityLookup`, which `check_standards` skips).
+  - It ran the build in Docker after finding `TEAM-KIT.md`: 130 tests green.
+  - It **called the `reviewer` agent by itself**, and the reviewer ran `check_standards`.
+  - It **asked** before marking m1 as fixed in the audit, instead of deciding. Cost $1.02.
+  - **Where it got stuck:** it tried `./mvnw test` three times without a JDK before finding the
+    Docker route. The house rules now say it directly. We threw away its edits; it was a scratch
+    clone.
+
+**Discussion: 8 developers, 3 AI tools. What goes in the repo, what stays personal?**
+- **In the repo:**
+  - everything that has to be the same for everyone: house rules, MCP config, skills, agents, hooks
+  - anything enforced, which has to work without any AI tool: the git hook and the CI check
+- **Personal:** model choice, keybindings, `settings.local.json`, API keys (always), and tool
+  preferences.
+- **Three tools:** keep the house rules in one tool-neutral file that Copilot reads directly and
+  `CLAUDE.md` imports. Put the MCP config in both formats. Skills and agents only help Claude Code
+  users, which is why the guardrail itself is git and CI.
+- **Who maintains it:** whoever changes a standard or a decision updates the kit in the same PR,
+  so a stale kit shows up in review. The standards owner (the Guild) owns the hosted server and the
+  rules. The team lead owns `TEAM-KIT.md`.
+
+**Verdict:** worked. The break test and the handover each found a real gap within minutes. We
+would never have found them by reading our own config.
+
+---
+
+## Share it (Retro 3, 5 minutes)
+
+- **What we built, in one sentence:** an MCP tool that checks the standards in code, an AI summary
+  endpoint with validation and an eval that measures it, and a team kit that enforces "don't touch
+  existing tests" instead of asking nicely.
+- **One thing that failed, and what we learned:**
+  - Our mocked tests said timeouts were handled. The real API showed a 30 s timeout coming back as
+    502, because the real JDK client reports it differently from the exception we gave the mock.
+  - Lesson: mock the provider for the logic, but hit a real (slow) socket at least once.
+  - Runner-up: our eval reported "BUILD SUCCESS" with **0 tests**, because Surefire ignores
+    classes that don't end in `Test`.
+- **What we'd do differently if a client paid for it:**
+  - Before writing any code, get the DPO's sign-off on sending retro feedback to a US model
+    provider (or use an EU-hosted model).
+  - Turn on branch protection with `test-guardrail` required on day one.

@@ -4,7 +4,7 @@
 # Bypass on purpose, after asking the team:  ALLOW_TEST_CHANGES="why" git commit ...
 set -euo pipefail
 
-changed=$(git diff --cached --name-status --diff-filter=MDR -- 'src/test/' | awk '{print $NF" ("$1")"}')
+changed=$(git diff --cached --name-status --diff-filter=MDR -- 'src/test/' 'mcp-decisions/test/' | awk '{print $NF" ("$1")"}')
 [ -z "$changed" ] && exit 0
 
 if [ -n "${ALLOW_TEST_CHANGES:-}" ]; then
