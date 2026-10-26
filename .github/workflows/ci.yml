@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: ["**"]
+  # PRs into any branch: our PRs are stacked (block3 -> block2 -> block1 -> master), and the
+  # test-guardrail job only runs on pull_request events.
   pull_request:
-    # This fork's default branch is master; the course says main. Cover both.
-    branches: [main, master]
 
 # Least privilege by default; the job below widens only what it needs.
 permissions:
@@ -16,6 +16,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The pre-commit hook can be skipped with --no-verify; this check can't (TEAM-KIT.md).
+  # A PR may add tests but not change, delete or rename existing ones, unless its description
+  # contains a line "ALLOW_TEST_CHANGES: <reason>" that the team agreed on.
+  test-guardrail:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Existing tests are unchanged
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          changed=$(git diff --name-status --diff-filter=MDR "$BASE_SHA"...HEAD -- src/test mcp-decisions/test)
+          if [ -z "$changed" ]; then echo "No existing test changed."; exit 0; fi
+          echo "Existing tests changed in this PR:"; echo "$changed"
+          if printf '%s' "$PR_BODY" | grep -q '^ALLOW_TEST_CHANGES: .\+'; then
+            echo "Allowed by the PR description:"; printf '%s' "$PR_BODY" | grep '^ALLOW_TEST_CHANGES:'
+            exit 0
+          fi
+          echo "::error::This PR changes, deletes or renames existing tests. Add new tests instead, or agree with the team and add 'ALLOW_TEST_CHANGES: <reason>' to the PR description."
+          exit 1
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15

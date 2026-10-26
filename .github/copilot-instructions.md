@@ -8,7 +8,9 @@
 - Tests: name them `method_condition_expectedBehaviour`, use `// Arrange`, `// Act`, `// Assert` comments, named constants instead of magic values, and assert real values and messages, not just "not null".
 - When the brief or `decisions.md` doesn't answer a question, flag it and ask. Don't pick a default silently.
 - When you have a choice between approaches, explain briefly why you chose yours.
-- Before you say you're done: run `./mvnw test` (or `./mvnw verify` for coverage) and report the real result.
+- Before you say you're done: run `./mvnw test` (or `./mvnw verify` for coverage) and report the real result. No local JDK? Use Docker: `docker run --rm -v "$PWD":/workspace -w /workspace maven:3.9-eclipse-temurin-21 mvn -B verify`.
 - **Never change, skip or disable a test just to make it pass.** If a test looks wrong, stop and ask us first. `RetroflowBusinessRulesTest` is never edited.
 - **Never add a dependency or plugin without first checking that the exact version exists on Maven Central.** Say which version you checked, and ask before adding it.
-- Never put secrets in code or config, never concatenate strings into JPQL/SQL, and never return stack traces or class names to API clients.
+- Never put secrets in code or config, never concatenate strings into JPQL/SQL, and never return stack traces or class names to API clients. The OpenAI key only comes from the `OPENAI_API_KEY` environment variable.
+- Tests tagged `eval` call a paid model (`./mvnw test -Peval`): only run them when asked. Normal tests never call a real model; stub `SummaryModel` instead.
+- Tools in this repo: StackCraft standards via the `ai-track-standards` MCP server, mechanical checks via `check_standards` (`retroflow-decisions` server), skills in `.claude/skills/`, agents `reviewer` (read and run only) and `implementer`. See `TEAM-KIT.md`.

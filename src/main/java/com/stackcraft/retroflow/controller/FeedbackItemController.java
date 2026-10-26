@@ -2,6 +2,7 @@ package com.stackcraft.retroflow.controller;
 
 import com.stackcraft.retroflow.dto.CreateFeedbackItemRequest;
 import com.stackcraft.retroflow.dto.FeedbackItemResponse;
+import com.stackcraft.retroflow.dto.RetrospectiveSummaryResponse;
 import com.stackcraft.retroflow.dto.UpdateFeedbackItemRequest;
 import com.stackcraft.retroflow.service.FeedbackItemService;
 import jakarta.validation.Valid;
@@ -43,6 +44,15 @@ public class FeedbackItemController {
         return feedbackItemService.getFeedbackItems(retrospectiveId).stream()
                 .map(FeedbackItemResponse::from)
                 .toList();
+    }
+
+    /**
+     * 200 OK with a summary written by a language model. 404 unknown retro, 409 retro still open,
+     * 400 too many items, 502/503/504 when the model fails (the message says which).
+     */
+    @PostMapping("/retrospectives/{retrospectiveId}/summary")
+    public RetrospectiveSummaryResponse summarise(@PathVariable Long retrospectiveId) {
+        return RetrospectiveSummaryResponse.from(feedbackItemService.summarise(retrospectiveId));
     }
 
     /** 200 OK, 400 invalid content, 404 unknown item, 409 retro closed. */

@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "ai-track-standards": {
+      "type": "http",
+      "url": "https://ai-track-ps-production.up.railway.app/mcp"
+    },
+    "retroflow-decisions": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-decisions/server.js"]
+    }
+  }
+}

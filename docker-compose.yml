@@ -10,6 +10,10 @@ services:
     environment:
       # H2 console binds to localhost by default; allow access from the host browser.
       SPRING_H2_CONSOLE_SETTINGS_WEB_ALLOW_OTHERS: "true"
+      # Passed through from your shell for the summary endpoint; the value never goes in this file.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RETROFLOW_SUMMARY_MAX_ITEMS: ${RETROFLOW_SUMMARY_MAX_ITEMS:-500}
+      RETROFLOW_SUMMARY_TIMEOUT: ${RETROFLOW_SUMMARY_TIMEOUT:-30s}
     restart: unless-stopped
 
   # Tests: docker compose run --rm test
