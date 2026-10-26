@@ -429,3 +429,385 @@ of letting the agent decide.
 ### Open points after Block 2
 - Store the author with the team's spelling of the member name? (see above)
 - D-F6 (complete after close) is still waiting for the CTO.
+
+---
+---
+
+# Prompt log: Block 3
+
+Same setup as Block 2: Claude Code plays both pairs one after the other.
+- Pair AD works on `block3-audit`.
+- Pair BC works on `block3-review`.
+- Both get merged into `block3` (our stand-in for `main`).
+
+Every StackCraft rule we cite in this block comes from the `ai-track-standards` MCP server
+(`read_document("stackcraft-coding")`, version 3.1). The local `stackcraft-coding-standards.md`
+is only used to check the quotes.
+
+## Setting up (both pairs)
+
+- `.mcp.json` in the root of the repo registers `ai-track-standards` for Claude Code
+  (`https://ai-track-ps-production.up.railway.app/mcp`, HTTP, no login). Copilot users: use
+  `.vscode/mcp.json` from `block3.md`. It isn't committed because `.vscode/` is in `.gitignore`.
+- The tools list shows `mcp__ai-track-standards__list_documents` and `read_document`.
+  `list_documents` returns `stackcraft-coding`, `stackcraft-qa` and `meridian-regulatory`.
+- There is no local JDK on this machine. Maven runs in Docker:
+  `docker run --rm -v "$PWD":/workspace -v ai-track-ps-dev-retroflow_m2:/root/.m2 -w /workspace maven:3.9-eclipse-temurin-21 mvn -B verify`.
+
+## Step 1 (both pairs): feel the difference
+
+The same question, asked three times with `claude -p` in an empty folder, so the repo's
+`CLAUDE.md` (which already contains the answer) is not loaded.
+
+**Question**
+
+```
+What exact format does StackCraft require for exception messages in the service layer,
+and which HTTP status code do we have to use when a business rule is violated?
+```
+
+**Our extra sentence for the run with the connector**
+
+```
+Answer only from the stackcraft-coding document on the ai-track-standards MCP server: read it
+with read_document first, quote the exact section number and wording you rely on, and say so if
+the document does not answer part of the question.
+```
+
+| Run | Setup | What came back |
+|---|---|---|
+| A: "off" | MCP off, file tools still on | It **went looking on disk** and found `ai-course/ai-track-ps-dev/stackcraft-coding-standards.md`. The answer was correct (§2.1, 409), but grounded in a file we never pointed it to. "Switching off the connector" is not the same as "no context" when an agent can read files. |
+| B: really off | MCP off, file and web tools off | **Honest:** "I don't recognize StackCraft… rather than guess, I'll say I don't know". Then it still gave a "usual practice" fallback: **422** (or 409) and an `ERROR_CODE: message` / RFC 9457 format. That is wrong for StackCraft (§4.1 says 409, and §2.1 is a different format). Anyone who reads only the bullets copies the wrong answer. |
+| C: on | MCP on, plus our extra sentence | Called `read_document`, quoted **§2.1** `[EntityType] [identifier]: [human-readable reason]` with the 3 examples, and **§4.1** "Business rule violation → 409 Conflict" plus "Using … 400 for a business rule violation, is a Critical violation." It also listed what the document **doesn't** cover: which exception class to use, what an "identifier" is when there is no id, and where validation ends and a business rule begins. |
+
+**Check against `stackcraft-coding-standards.md`:** §2.1 (lines 67-80) and §4.1 (lines 187-204)
+exist and are quoted word for word. Run C also noticed that the §2.2 sample body says
+`"status": 400`, which contradicts §4.1 if you copy it for a business rule. That one is easy to
+miss.
+
+**Our own service layer:** we already use the §2.1 format, e.g. `ActionItemService:117`
+`"ActionItem " + id + ": already completed, cannot be undone"` (the standard's own example) and
+`NotFoundException` → `"{Entity} {id}: not found"`. Our own convention for when there's no id
+yet: `Team new: …`, `FeedbackItem new: …`, and `Request -: …` for errors that belong to no
+entity (decision G3). The standard says nothing about this case, and run C flagged that gap too.
+
+**Verdict:** worked. The difference: without the connector you get either an honest "I don't
+know" followed by a plausible wrong default, or an agent that quietly grounds itself in whatever
+file it finds. With the connector you get the real section numbers, quotes you can check, and a
+list of what the document leaves open.
+
+## Pair AD (`block3-audit`)
+
+### Step 2: the audit
+
+**Prompt**
+
+```
+Read the StackCraft coding standards through the ai-track-standards MCP server
+(read_document "stackcraft-coding"). Don't use what you remember about Java standards: if a rule
+isn't in that document, it isn't a finding. Then audit everything under src/ against every
+section, one by one. For every finding give: the file and line, the exact quote of the section it
+breaks, why it matters (use the document's own reason where it gives one), the correct
+implementation as code, and the severity from the section's "Violation severity" line. Sort
+Critical → Major → Minor. Use mechanical checks where you can (line counts, grep for @Autowired,
+catch blocks and @Query) and say how you checked. Also list the sections you checked that came
+out clean. Where a rule is ambiguous, or two of our rules conflict, flag it instead of deciding.
+Write it to audit/audit-findings.md. Don't change any code.
+```
+
+**Result:** `audit/audit-findings.md`: 3 Critical, 3 Major and 4 Minor findings, 11 sections clean,
+2 open questions for the Guild, and 1 security issue outside the standards.
+- **C1 §2.1:** `FeedbackItem.java:79` throws `"Use ActionItem for feedback of type ACTION_ITEM"`,
+  which leaves the service layer unparseable. It can't be reached through the API today.
+- **C2 §1.4:** `@Autowired` fields in test code. Production code is clean (ArchUnit checks it).
+  ⚖️ Fixing it means editing existing tests, which step 3 forbids. *(Corrected in step 4: we first
+  listed 6 classes plus the vendor test, but 5 of those were `@Autowired` constructors. Only
+  `ControllerContractTest:21` and the vendor test really use field injection.)*
+- **C3 §4.1 (disputed):** "author is not a member" returns 400. It depends on stored state, like our
+  409s do. ⚖️ This is a team decision (F1), not the AI's.
+- **Major:** enum values are validated in the service, not at the boundary (§5.2); the vendor-facing
+  `createRetrospective(teamId, title)` has no JavaDoc tags (§6.1, Major because it's a business
+  rule); layer-first packages (§1.1, grandfathered).
+
+**Then check it**
+- **Three quotes looked up** in `stackcraft-coding-standards.md` (§2.1, §1.4, §5.2, plus §6.1):
+  all verbatim, none made up. One surprise: the document **contradicts itself** on §1.1. The
+  heading says "(CRITICAL)", the severity line says "Major".
+- **Two findings opened at the named line** (`FeedbackItem.java:79`, `ServiceValidation.java:49`):
+  the violation is really there.
+- **§1.1 found?** Yes, as Major and grandfathered. It's tricky because the vendor test imports
+  `…entity`/`…service`/`…exception`, so going feature-first would break a file we may never edit.
+- **False positive from our own tooling:** the method-length script reported a 49-line test. A
+  `{` inside a JSON string literal threw off the brace counting, and the method is really 4 lines.
+  A mechanical check needs checking too.
+
+**Verdict:** worked. Grounding changed the audit: no generic "use Lombok"- or "add Swagger"-style
+findings, every finding points to a section, and the ambiguous ones (C2, C3) are flagged instead
+of "fixed".
+
+### Step 3: fix the Critical findings, with the tests watching
+
+**Prompt**
+
+```
+Fix the Critical findings in audit/audit-findings.md one at a time. For each: make the smallest
+change in src/main, run `mvn test` yourself, and stop if anything goes red. Existing tests are
+never edited: if a fix would need that, don't fix it, flag it. Findings marked ⚖️ need a team
+decision: don't fix those, write down why. After each fix, update its entry in the audit (what was
+wrong, which section) and commit it on its own. Finish with `mvn verify` and `git diff -- src/test`.
+```
+
+**Result**
+- **Fix 1, C1 §2.1** (`684b6e8`): the `FeedbackItem` guard message is now
+  `FeedbackItem new: type ACTION_ITEM must be created as an ActionItem`. `mvn test`: 89/89.
+- **Fix 2, M2 §6.1** (`d2a6648`): full `@param`/`@return`/`@throws` on
+  `createRetrospective(teamId, title)`. It's Major, not Critical, but it's a business-rule method
+  and a three-line change. `mvn test`: 89/89.
+- **C2 §1.4, not fixed** ⚖️: field injection lives only in test classes. Converting them means
+  editing existing tests (forbidden in this step), and the vendor test can never comply. Question
+  for the team: does §1.4 apply to `src/test`?
+- **C3 §4.1, not fixed** ⚖️: changing "not a member" from 400 to 409 changes decision F1, matrix row
+  30 and existing tests. That's the team's call, not ours.
+- `mvn verify`: **89/89 green**, coverage 93.7% lines / 86.0% branches, BUILD SUCCESS.
+  `git diff dbbe1e2 -- src/test` is **empty**: no test was touched.
+- **Test for fix 1:** none yet, on purpose. Block 3 has us write it with the other pair's
+  `stackcraft-tests` skill in the swap.
+
+**Verdict:** worked, but only 1 of the 3 Criticals could be fixed inside the rules of this step.
+The other two are real disagreements (a rule vs. a vendor file, and a rule the standard doesn't
+define), and an agent "fixing" them would just be picking a side for us.
+
+### Step 4: draft the `stackcraft-audit` skill
+
+**Prompt**
+
+```
+Turn what worked in our step 2 audit into a skill: .claude/skills/stackcraft-audit/SKILL.md,
+under 40 lines, in the name/description/instructions format from block3.md. It must make the AI
+read the standards through the ai-track-standards MCP server (never from memory), go section by
+section, and write audit/audit-findings.md in the same structure as ours. Put the mechanical
+checks (class length, @Autowired fields, catch blocks, query concatenation, secrets in config)
+in a small script next to it, and tell the AI to open every hit before reporting it.
+Spend most of the care on the description: it's what decides whether the skill gets loaded.
+```
+
+**Result**
+- `.claude/skills/stackcraft-audit/SKILL.md` (38 lines) and `checks.sh`.
+- `.claude/` is in this machine's global gitignore, so the skill is added with `git add -f`.
+- **The script caught a mistake in our own audit.** C2 listed 6 test classes with field
+  injection, but 5 of them are `@Autowired` **constructors**. The audit had trusted a bare
+  `grep "@Autowired"` without opening the lines. The script looks at the line after the annotation
+  and found only `ControllerContractTest:21` and the vendor test. C2 is corrected in
+  `audit/audit-findings.md`, with a note.
+- **What we edited by hand:** the description. It now names the triggers ("audit", "check
+  compliance", "violations of our coding standards", "before a fix round") instead of just "audits
+  code". It also says what the output is, so the AI can tell this skill apart from
+  `stackcraft-tests`.
+
+**Verdict:** worked, and it was humbling. Writing the mechanical check down as a script proved
+one of our own "checked" findings wrong. Exactly the habit the skill now forces ("open every hit
+before you report it").
+
+## Pair BC (`block3-review`)
+
+### Step 2: the review, with proof
+
+**Prompt**
+
+```
+You are the senior developer reviewing RetroFlow before it goes to staging. First read StackCraft's
+standards through the ai-track-standards MCP server: read_document("stackcraft-coding") and
+read_document("stackcraft-qa"). Cite only section numbers you actually read there.
+Then review the codebase and retroflow-brief.md on four dimensions: security, API design, business
+rules and test quality. Do NOT change any code.
+Every finding needs proof: either a quoted line (file:line) or a command you ran plus its output.
+Start the app (Docker, port 18080) and check every business rule from the brief over HTTP, one
+operation at a time. "Cannot be modified or deleted" is separate operations: add, modify and delete,
+for feedback items AND action items.
+Give every finding a severity (Critical/High/Medium/Low, QA §4.2 definitions) and a fix.
+The brief says no authentication is required: don't report missing auth. Before you report an
+injection finding, show me the concatenated string. List the findings you dropped as false
+positives, and why.
+```
+
+**Result**
+- The MCP server was used for both documents: `stackcraft-coding` v3.1 and `stackcraft-qa` v2.0.
+  The quoted sections (coding §2.1, §2.2, §4.1, §4.2, §5.1, §5.3 and QA §1.1, §2.1, §2.2, §3.1,
+  §3.2, §4.2, §6.1, §6.2) were checked against `stackcraft-coding-standards.md`. There is no local
+  copy of the QA document, so those quotes come only from the server.
+- **Business rules over HTTP (running app, `retroflow-review:block3` on :18080):** all correct.
+
+  | Request | Response |
+  |---|---|
+  | 2nd OPEN retro | `409 Team 1: already has an open retrospective (1)` |
+  | close twice | `409 Retrospective 1: already closed` |
+  | `PUT …/reopen` | `404` |
+  | closed retro: add feedback / add action item | `409 … cannot add feedback to a closed retrospective` (both) |
+  | closed retro: modify feedback / delete feedback | `409 FeedbackItem 1: cannot modify …` / `cannot delete …` |
+  | closed retro: modify action item (both routes) / delete it | `409 ActionItem 2: cannot modify …` / `cannot delete …` |
+  | complete after close | `200 completed:true` (F6) |
+  | complete twice | `409 ActionItem 2: already completed` |
+  | uncomplete a completed item | `409 ActionItem 2: already completed, cannot be undone` |
+  | filter `priority=HIGH&completed=true` | `200 [the one item]` |
+
+- **Input:** 400s with meaningful messages for an empty member list, duplicate members, an unknown
+  type, an author who isn't a member, ACTION_ITEM through the feedback route, `priority=URGENT`,
+  `completed=maybe` and `/teams/abc`. One weak spot: a bad `date` only says
+  `Request -: malformed JSON or invalid field value`.
+- **Findings:** 2 must-fix (C1 the H2 console is open with an empty password via compose,
+  reproduced; C2 no HTTP-level test of any business rule, QA §1.1), 4 should-fix (race on add vs.
+  close, author spelling, vendor `isInstanceOf`, vendor fixed names) and 4 low. Details are in
+  `review/pre-staging-review.md`.
+- **`mvn -B verify` (Docker):** 89 tests, 0 failures, coverage gate met, BUILD SUCCESS.
+- **Dropped as false positives:**
+  - JPQL injection in `ActionItemRepository.findForTeam`: named parameters, nothing concatenated.
+  - Missing auth: out of scope according to the brief.
+  - "Tautological" `isNotNull()` in `ServiceHappyPathTest:65`: it's followed by three `isEqualTo` assertions.
+
+**Verdict:** worked. Starting the app was what made the difference. The H2 finding only shows up
+with the compose setting: the bare image refuses remote console access, so reading the code alone
+would have left it at "maybe". We still had to check the line numbers ourselves (the first draft
+cited the vendor test at :46/:59/:74, the real lines are :48/:60/:76).
+
+### Step 3: the review document
+
+**Prompt**
+
+```
+Turn the step 2 findings into review/pre-staging-review.md, a document we can send to the dev team:
+a 3-4 sentence summary plus one plain-language line a non-technical stakeholder can act on (QA §6.2),
+the critical issues (must fix before staging), the other issues (should fix / when time allows),
+at least 3 things done well, the false positives we dropped, what we did NOT check (QA §6.1), and a
+sign-off status BLOCKED / CONDITIONAL / APPROVED with the reason. Keep the proof column for every
+finding. Don't change any code.
+```
+
+**Result**
+- `review/pre-staging-review.md`: 2 must-fix, 4 should-fix, 4 low, 5 things done well, 3 false
+  positives, a scope section, and how we checked.
+- **Sign-off: CONDITIONAL.** No runtime defect: every rule held over HTTP. But C1 (an open database
+  console bypasses every rule) and C2 (QA §1.1, no test against a running instance) have to be fixed
+  before staging.
+- Why not BLOCKED: nothing is broken for users, and both fixes are small and clear (a config change
+  and one `RANDOM_PORT` test class). Why not APPROVED: QA §1.1 rates C2 Critical as a standards
+  violation, and C1 is a security exposure by QA §4.2's definition.
+
+**Verdict:** worked. For the showcase: false positive = "JPQL injection" (named parameters); real
+finding = the H2 console, reproduced with curl.
+
+### Step 4: draft the `stackcraft-tests` skill
+
+**Prompt**
+
+```
+Write .claude/skills/stackcraft-tests/SKILL.md (under 40 lines, frontmatter name + description) for
+writing and reviewing tests the StackCraft way. Base it on what worked today: Block 2 AC step 3
+(one test per matrix row, naming, AAA, exact assertions, prove the test can fail) and BC step 2
+(status AND body, no lone isNotNull, isInstanceOf on a hierarchy, a test against the running app).
+The skill must send the AI to the ai-track-standards MCP server (stackcraft-coding §3 and
+stackcraft-qa) instead of memory, and cite section numbers. Add a template test class next to it that
+shows the HTTP-level layout (QA §1.1), and prove the template compiles and passes before committing.
+Spend most of the care on the description: when should the AI load this skill?
+```
+
+**Result**
+- `.claude/skills/stackcraft-tests/SKILL.md`: 35 lines, with a section for writing and one for reviewing, plus "never" rules.
+- `template/BusinessRuleHttpTest.java`: a `RANDOM_PORT` + `TestRestTemplate` test for the
+  "one OPEN retro" rule, with a unique team name, Arrange/Act/Assert, and checks on both the status
+  and the `error` body. Proven: copied into `src/test` temporarily, then
+  `mvn test -Dtest=BusinessRuleHttpTest` gave `Tests run: 1, Failures: 0`. Removed again, and `git status` was clean.
+- The description names the triggers: adding tests for a fix, a business rule or an endpoint;
+  reviewing test quality; checking a suite against the QA standards.
+- Catch: `.claude/` is in the global gitignore on this machine, so the skill folder needs
+  `git add -f`. Without it, the skill would never have reached the other pair.
+
+**Verdict:** worked. The template does double duty: it's also the start of the fix for review finding C2.
+
+---
+
+## Swap: each pair runs the other pair's skill in a fresh session
+
+Both runs used `claude -p` with no history: the MCP server attached, scoped permissions, and a
+prompt that **does not mention the skill**.
+
+### Pair AD runs `stackcraft-tests`
+
+**Prompt**
+
+```
+We fixed the Critical findings from our StackCraft audit in step 3 (see audit/audit-findings.md,
+the findings marked ✅). Write the tests for those fixes. There is no local JDK: run Maven in
+Docker with docker run … maven:3.9-eclipse-temurin-21 mvn -B -ntp test
+```
+
+**Result**
+- **Picked up the skill on its own:** its very first tool call was `Skill stackcraft-tests`. Then
+  it read `stackcraft-coding` **and** `stackcraft-qa` through the MCP server.
+- It wrote 4 tests for C1 (`c48e738`):
+  - `entity/FeedbackItemTest`: the exact §2.1 message, plus the two types that still pass.
+  - `FeedbackItemTypeHttpTest`: over HTTP on the running app (QA §1.1), ACTION_ITEM gives a 400
+    with the service's message and nothing is saved.
+- It worked out by itself why there are two tests: the guard can't be reached through the API,
+  so only a unit test can pin its message.
+- **Proved they can fail:** it put the old message back, and then disabled the service check. The
+  right test failed both times, and the code was restored with `git checkout`.
+- It correctly left M2 (JavaDoc only) and C2/C3 (⚖️) without tests.
+- It ran `mvn test`, but not `mvn verify`. We ran that ourselves: **93/93, coverage 94.0% lines /
+  88.0% branches**, BUILD SUCCESS.
+- **Did it do what BC had in mind?** Yes, and better: it **refused to copy the template's field
+  injection** (`@Autowired private TestRestTemplate http`, the C2 pattern) and used a constructor.
+
+**Feedback we gave Pair BC:** your template teaches the pattern our audit flags as Critical
+(§1.4). BC fixed the template to use constructor injection, and proved it again:
+`mvn test -Dtest=BusinessRuleHttpTest` → 1/1, then removed it from `src/test`.
+
+### Pair BC runs `stackcraft-audit`
+
+**Prompt**
+
+```
+Check this codebase against StackCraft's coding standards and tell me where it violates them.
+```
+
+**Result**
+- **Picked up the skill on its own:** its first tool call was `Skill stackcraft-audit`, then
+  `read_document("stackcraft-coding")`.
+- It found the existing `audit/audit-findings.md`, **left it alone**, kept its IDs and wrote
+  `audit/audit-findings-2026-10-26.md`.
+- **Found what our audit missed:**
+  - 15 Minor items, e.g. `TeamControllerTest:62` without `// Arrange`. Our AAA script skipped that
+    one for the same `{`-in-a-string reason as the method-length script.
+  - 12 hard-coded ids in expected messages.
+  - The `@MockBean` fields as a §1.4 question.
+  - `m1` line numbers that went stale after our own fix 2.
+  - §3.1 having no severity line.
+- **Checked:** `ControllerContractTest.java:24-34` really has four `@MockBean` fields, and
+  `getRetrospective` really moved to `:91`. Both claims are true.
+- **What it could not do:** our permission scope blocked `mvn verify` and a `git log` scan, and it
+  said so instead of pretending.
+- The comparison with BC's review is at the end of `review/pre-staging-review.md`.
+
+**Feedback we gave Pair AD:** say what to do when the audit file already exists. Now in the
+skill (39 lines).
+
+**Verdict:** both skills got loaded from their description alone. That was the point of
+spending the time on the descriptions.
+
+---
+
+## Both pairs: done?
+
+- **With vs. without the connector:** see step 1. Without it we got "I don't know" followed by a
+  wrong default (422), or an agent quietly reading a local file. With it we got §2.1 and §4.1,
+  quoted and checkable.
+- **`mvn verify` on `block3`:** 93/93, coverage 94.0% / 88.0%, BUILD SUCCESS.
+- **Prompts we'd reuse on a real project:**
+  - the AD step 2 audit prompt: "if a rule isn't in that document, it isn't a finding"
+  - the BC review prompt: proof for every finding, by running the app
+  - "prove the test can fail, then restore the code" from Block 2
+- **One thing each for Retro 3:**
+  - **AD:** our own mechanical check (`checks.sh`) proved one of our own "checked" Critical
+    findings wrong. 5 of the 6 classes were `@Autowired` constructors.
+  - **BC:** the agent that read the standard found test-style issues. The agent that ran the
+    app found an open database console. Grounding tells you what the rules say; running the app
+    tells you what's actually broken.

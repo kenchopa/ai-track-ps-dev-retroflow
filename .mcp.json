@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ai-track-standards": {
+      "type": "http",
+      "url": "https://ai-track-ps-production.up.railway.app/mcp"
+    }
+  }
+}

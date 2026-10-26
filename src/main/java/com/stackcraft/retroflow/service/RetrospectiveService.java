@@ -45,6 +45,12 @@ public class RetrospectiveService {
     /**
      * Creates an OPEN retrospective dated today.
      *
+     * @param teamId id of the team
+     * @param title  title of the retrospective, trimmed
+     * @return the saved retrospective
+     * @throws InvalidInputException if the title is blank or too long
+     * @throws NotFoundException     if the team does not exist
+     * @throws RetroflowException    if the team already has an OPEN retrospective
      * @see #createRetrospective(Long, String, LocalDate)
      */
     @Transactional
