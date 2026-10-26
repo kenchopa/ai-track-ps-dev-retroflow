@@ -284,3 +284,35 @@ already decision G1. The brief itself only says "appropriate", so we confirmed i
 **Verdict:** worked. Nothing in services, entities or repositories is touched. Gap (b) was
 flagged instead of decided, and we decided it ourselves (the extra `PUT /api/action-items/{id}`,
 added to the contract).
+
+### Step 2: write the contract tests first
+
+**Prompt**
+
+```
+Following the plan, write a web-layer test class per controller in src/test/.../controller:
+Team, Retrospective, FeedbackItem and ActionItem (the last two per the decisions.md contract).
+Test only the web layer: @WebMvcTest with every service mocked. Send JSON in and assert on JSON
+out (jsonPath), never on Java classes, so the tests survive the restructuring. Check the status
+AND the body, including the error format {error, status, timestamp}. Cover success, 400, 404
+and 409 where they apply. Run them and report which fail and why. Don't fix anything yet.
+```
+
+**Result:** 42 contract tests in 4 classes, sharing a `ControllerContractTest` base and `WebFixtures`.
+- `TeamControllerTest` 9, `RetrospectiveControllerTest` 10, `FeedbackItemControllerTest` 11, `ActionItemControllerTest` 12.
+- **24 fail, all for real reasons:**
+  - 22 tests: the feedback and action item endpoints don't exist yet, so they get a 404 from
+    Spring ("Request -: Not Found").
+  - `createTeam_whenDatabaseRejectsDuplicate_returns409WithoutDatabaseDetails`: a
+    `DataIntegrityViolationException` becomes a **500**. This is gap (d) from the plan. Code
+    bug, not a test bug.
+  - `getFeedbackItems_forUnknownRetro_returns404`. See below.
+- **A test that could never fail.** The first version of `getFeedbackItems_forUnknownRetro_returns404`
+  was **green**, even though the endpoint doesn't exist. It only checked for a 404, and an
+  unknown route is also a 404. We made it assert the error message as well
+  (`Retrospective 999: not found`), and now it fails for the right reason. The same trap exists
+  for `reopenRetrospective_hasNoEndpoint_returns404`, but there a route-level 404 is exactly
+  what we want (test-matrix.md row 5).
+
+**Verdict:** needed one fix. Checking the status alone isn't enough for "not found" tests: always
+assert the body too.
