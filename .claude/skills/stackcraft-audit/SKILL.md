@@ -11,9 +11,9 @@ isn't in that document is not a finding. Note the version you read. Server unrea
 ## Steps
 1. Read the whole document. Then read `decisions.md` and `CLAUDE.md`: our own rules and agreed
    exceptions (e.g. grandfathered packages, vendor tests that may never be edited).
-2. Run `bash .claude/skills/stackcraft-audit/checks.sh` for the mechanical part (class length,
-   `@Autowired` fields, catch blocks, query strings). Open every hit before you report it: the script
-   has false positives (e.g. a `{` inside a string literal).
+2. Mechanical part: call the `check_standards` MCP tool (server `retroflow-decisions`) on `src`.
+   Only if that tool isn't available, run `bash .claude/skills/stackcraft-audit/checks.sh`.
+   Open every hit before you report it, and cite which of the two you used.
 3. Go through the document **section by section**, in order. For each section: finding(s), or "clean"
    plus how you checked it.
 4. Open the file at the line before you write a finding. No line, no finding.

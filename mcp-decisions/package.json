@@ -1,13 +1,13 @@
 {
   "name": "retroflow-decisions-mcp",
   "version": "1.0.0",
-  "description": "Local MCP server (stdio) that serves RetroFlow's decisions.md to an AI tool",
+  "description": "Local MCP server (stdio) for RetroFlow: serves decisions.md and runs mechanical StackCraft checks",
   "private": true,
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node smoke-test.js"
+    "test": "node --test \"test/*.test.js\""
   },
   "engines": {
     "node": ">=20"
