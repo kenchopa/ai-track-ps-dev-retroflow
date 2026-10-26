@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: ["**"]
+  # PRs into any branch: our PRs are stacked (block3 -> block2 -> block1 -> master), and the
+  # test-guardrail job only runs on pull_request events.
   pull_request:
-    # This fork's default branch is master; the course says main. Cover both.
-    branches: [main, master]
 
 # Least privilege by default; the job below widens only what it needs.
 permissions:
