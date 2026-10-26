@@ -3,43 +3,37 @@
 Backend API for StackCraft's internal retrospective tool. Replaces the mix of sticky notes,
 Miro boards, and shared Google Docs the 12 dev teams currently use to run retros.
 
-## Tech stack
+## Tech stack (as actually configured)
 
 - Java 21
-- Spring Boot 3
-- Gradle
-- PostgreSQL
+- Spring Boot 3.3.4 (web, data-jpa, validation)
+- **Maven**: `pom.xml`. There is no Gradle build.
+- **H2 in-memory database**: `jdbc:h2:mem:retroflow`. Data is lost on restart, which is intended
+  (see the brief). There is no PostgreSQL and no `application.yml`: configuration lives in
+  `src/main/resources/application.properties`.
 
 ## Getting started
 
-1. Make sure you have PostgreSQL running locally on port 5432. Create a database called
-   `retroflow`.
-2. Update `application.yml` with your local database credentials if they differ from the
-   defaults.
-3. Run the app:
+Requires JDK 21 and Maven 3.9+. No database to install.
 
-   ```
-   ./gradlew bootRun
-   ```
+```
+mvn spring-boot:run
+```
 
-4. The API will be available at http://localhost:8080.
+- The API is available at http://localhost:8080.
+- H2 console: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:mem:retroflow`, user `sa`, no password)
 
 ## Running tests
 
 ```
-./gradlew test
+mvn test
 ```
 
 ## Project structure
 
-Standard Spring Boot layered structure — controllers, services, repositories, entities.
-
-## Current status
-
-Core domain model (Team, Retrospective, FeedbackItem, ActionItem) and CRUD endpoints are in
-progress. See `RetroflowController` for the current endpoint list.
+Layer-first packages under `com.stackcraft.retroflow`: `entity`, `repository`, `controller`,
+`exception`. See `decisions.md` for why we keep that structure for now.
 
 ## Contact
 
-The previous team lead has left the company, so there is no forwarding contact. Ping #retroflow-support on
-Slack if you get stuck, though response times have been slow lately.
+The previous team lead has left the company. Ping #retroflow-support on Slack if you get stuck.
