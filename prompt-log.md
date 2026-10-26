@@ -130,3 +130,45 @@ Hard limits:
 
 **Verdict:** worked on the first run, so there was no failing test to work around. Because it was
 green immediately, step 3 has to prove that the tests can fail.
+
+### Step 3: generate the test suite
+
+**Prompt**
+
+```
+Read test-matrix.md and .github/copilot-instructions.md. Write one test per matrix row in
+src/test/.../service, next to the vendor test. Follow the house rules: name tests
+method_condition_expectedBehaviour, use Arrange/Act/Assert comments and named constants, and
+assert the exact exception type and message, not just "throws" or "not null". Put
+@DisplayName("Row N: ...") on every test so we can count them. Run `mvn test` and report.
+If a row can't be tested at the service level, flag it. Don't skip it silently.
+Then prove the tests can fail: break three rules in the code one at a time, run the tests,
+show which fail, and put the code back.
+```
+
+**Result**
+- Four test classes instead of one: `RetrospectiveRulesTest`, `FeedbackItemRulesTest`,
+  `ActionItemRulesTest` and `TeamRulesTest`, plus a shared `RetroflowFixtures`. One class would
+  have been about 500 lines, and StackCraft 1.2 allows at most 200.
+- `@Transactional`, so every test rolls back. Team names are random because the vendor tests
+  commit their teams to the same H2 database.
+- **35 of the 35 rows have a test** (counted with `grep -o '@DisplayName("Row N'`). There are 40
+  test runs in total: row 27 is parameterized (2 runs), plus 1 happy-path test and the 3 vendor
+  tests. All green.
+- Assertions use `isExactlyInstanceOf`, so a 409 rule can't pass by accidentally throwing the
+  400 or 404 subclass. They also check the full message.
+- Flagged:
+  - Row 5 ("reopen") is a reflection test at this level: there is no reopen method in the
+    service and no status setter on the entity. The HTTP part (PUT /reopen → 404) belongs to
+    Pair BD's contract tests.
+  - Row 35's `400` for `priority=URGENT` is the service's `InvalidInputException`. Mapping it to
+    HTTP is the web layer's job.
+- Sabotage check. Each time the code was put back with `git checkout`, and `git status` was clean.
+
+  | Sabotage | Tests that failed |
+  |---|---|
+  | `deleteFeedbackItem` ignores a closed retro | rows 9 and 11 |
+  | `uncompleteActionItem` silently does nothing | row 15 and the vendor test |
+  | open-retro check looks at `CLOSED` instead of `OPEN` | rows 1 and 2, row 34, and the vendor test |
+
+**Verdict:** worked. The row count matches the matrix, and the sabotage run shows the tests notice broken rules.
