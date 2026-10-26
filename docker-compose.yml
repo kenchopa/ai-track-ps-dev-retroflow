@@ -16,6 +16,17 @@ services:
       RETROFLOW_SUMMARY_TIMEOUT: ${RETROFLOW_SUMMARY_TIMEOUT:-30s}
     restart: unless-stopped
 
+  # Web UI on http://localhost:5173, proxying /api to the app: docker compose up --build app ui
+  ui:
+    build:
+      context: ./ui
+    image: retroflow-ui:latest
+    ports:
+      - "5173:8080"
+    depends_on:
+      - app
+    restart: unless-stopped
+
   # Tests: docker compose run --rm test
   test:
     build:

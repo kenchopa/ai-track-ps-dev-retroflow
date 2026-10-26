@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* RetroFlow design tokens. Documented in DESIGN.md at the repository root.
+   Zinc neutrals, one accent (teal), functional category colours that always come with an icon and a label. */
+
+:root {
+  --rf-canvas: #fafafa;
+  --rf-surface: #ffffff;
+  --rf-surface-2: #f4f4f5;
+  --rf-line: #e4e4e7;
+  --rf-line-strong: #d4d4d8;
+  --rf-control: #8a8a92;
+  --rf-fg: #18181b;
+  --rf-fg-muted: #52525b;
+  --rf-fg-subtle: #6b6b72;
+  --rf-accent: #0f766e;
+  --rf-accent-strong: #115e59;
+  --rf-accent-soft: #f0fdfa;
+  --rf-accent-line: #99f6e4;
+  --rf-on-accent: #ffffff;
+  --rf-positive: #047857;
+  --rf-positive-soft: #ecfdf5;
+  --rf-attention: #b45309;
+  --rf-attention-soft: #fffbeb;
+  --rf-danger: #be123c;
+  --rf-danger-soft: #fff1f2;
+  --rf-on-danger: #ffffff;
+  --rf-shadow-tint: 24 24 27;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rf-canvas: #0c0c0e;
+    --rf-surface: #17171a;
+    --rf-surface-2: #222226;
+    --rf-line: #2c2c31;
+    --rf-line-strong: #3f3f46;
+    --rf-control: #6b6b73;
+    --rf-fg: #f4f4f5;
+    --rf-fg-muted: #b4b4bc;
+    --rf-fg-subtle: #94949e;
+    --rf-accent: #2dd4bf;
+    --rf-accent-strong: #5eead4;
+    --rf-accent-soft: #0f2a28;
+    --rf-accent-line: #134e4a;
+    --rf-on-accent: #042f2e;
+    --rf-positive: #34d399;
+    --rf-positive-soft: #0f2a21;
+    --rf-attention: #fbbf24;
+    --rf-attention-soft: #2b2110;
+    --rf-danger: #fb7185;
+    --rf-danger-soft: #2e1218;
+    --rf-on-danger: #2a0a12;
+    --rf-shadow-tint: 0 0 0;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-canvas: var(--rf-canvas);
+  --color-surface: var(--rf-surface);
+  --color-surface-2: var(--rf-surface-2);
+  --color-line: var(--rf-line);
+  --color-line-strong: var(--rf-line-strong);
+  --color-control: var(--rf-control);
+  --color-fg: var(--rf-fg);
+  --color-fg-muted: var(--rf-fg-muted);
+  --color-fg-subtle: var(--rf-fg-subtle);
+  --color-accent: var(--rf-accent);
+  --color-accent-strong: var(--rf-accent-strong);
+  --color-accent-soft: var(--rf-accent-soft);
+  --color-accent-line: var(--rf-accent-line);
+  --color-on-accent: var(--rf-on-accent);
+  --color-positive: var(--rf-positive);
+  --color-positive-soft: var(--rf-positive-soft);
+  --color-attention: var(--rf-attention);
+  --color-attention-soft: var(--rf-attention-soft);
+  --color-danger: var(--rf-danger);
+  --color-danger-soft: var(--rf-danger-soft);
+  --color-on-danger: var(--rf-on-danger);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-sm: 0 1px 2px rgb(var(--rf-shadow-tint) / 0.06);
+  --shadow-md: 0 1px 2px rgb(var(--rf-shadow-tint) / 0.04), 0 8px 24px -12px rgb(var(--rf-shadow-tint) / 0.14);
+  --shadow-lg: 0 24px 48px -20px rgb(var(--rf-shadow-tint) / 0.28);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-canvas text-fg font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--rf-accent-soft);
+    color: var(--rf-fg);
+  }
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+  dialog.rf-dialog {
+    opacity: 0;
+    transform: scale(0.98);
+    transition:
+      opacity 200ms var(--ease-out-expo),
+      transform 200ms var(--ease-out-expo),
+      overlay 200ms allow-discrete,
+      display 200ms allow-discrete;
+  }
+  dialog.rf-dialog[open] {
+    opacity: 1;
+    transform: scale(1);
+  }
+  @starting-style {
+    dialog.rf-dialog[open] {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    dialog.rf-dialog {
+      transform: none;
+      transition: none;
+    }
+  }
+  dialog::backdrop {
+    background: rgb(var(--rf-shadow-tint) / 0.32);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    outline: 2px solid var(--rf-accent);
+    outline-offset: 2px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rf-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@utility skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    animation: rf-shimmer 1.6s var(--ease-out-expo) infinite;
+  }
+  @media (prefers-color-scheme: dark) {
+    &::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &::after { animation: none; }
+  }
+}
