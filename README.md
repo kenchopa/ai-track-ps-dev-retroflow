@@ -121,6 +121,7 @@ curl -i -X PUT localhost:8080/api/retrospectives/1/close
 | --- | --- |
 | `decisions.md` | Our interpretation of everything the brief leaves open |
 | `test-matrix.md` | One row per business rule and operation. Block 2 writes a test per row |
+| `.github/copilot-instructions.md` | House rules the AI assistants read before every request (`CLAUDE.md` imports them) |
 
 The code uses layer-first packages under `com.stackcraft.retroflow` (`entity`, `repository`,
 `service`, `controller`, `dto`, `exception`). `decisions.md` (G4) explains why.
