@@ -496,6 +496,118 @@ know" followed by a plausible wrong default, or an agent that quietly grounds it
 file it finds. With the connector you get the real section numbers, quotes you can check, and a
 list of what the document leaves open.
 
+## Pair AD (`block3-audit`)
+
+### Step 2: the audit
+
+**Prompt**
+
+```
+Read the StackCraft coding standards through the ai-track-standards MCP server
+(read_document "stackcraft-coding"). Don't use what you remember about Java standards: if a rule
+isn't in that document, it isn't a finding. Then audit everything under src/ against every
+section, one by one. For every finding give: the file and line, the exact quote of the section it
+breaks, why it matters (use the document's own reason where it gives one), the correct
+implementation as code, and the severity from the section's "Violation severity" line. Sort
+Critical → Major → Minor. Use mechanical checks where you can (line counts, grep for @Autowired,
+catch blocks and @Query) and say how you checked. Also list the sections you checked that came
+out clean. Where a rule is ambiguous, or two of our rules conflict, flag it instead of deciding.
+Write it to audit/audit-findings.md. Don't change any code.
+```
+
+**Result:** `audit/audit-findings.md`: 3 Critical, 3 Major and 4 Minor findings, 11 sections clean,
+2 open questions for the Guild, and 1 security issue outside the standards.
+- **C1 §2.1:** `FeedbackItem.java:79` throws `"Use ActionItem for feedback of type ACTION_ITEM"`,
+  which leaves the service layer unparseable. It can't be reached through the API today.
+- **C2 §1.4:** `@Autowired` fields in test code. Production code is clean (ArchUnit checks it).
+  ⚖️ Fixing it means editing existing tests, which step 3 forbids. *(Corrected in step 4: we first
+  listed 6 classes plus the vendor test, but 5 of those were `@Autowired` constructors. Only
+  `ControllerContractTest:21` and the vendor test really use field injection.)*
+- **C3 §4.1 (disputed):** "author is not a member" returns 400. It depends on stored state, like our
+  409s do. ⚖️ This is a team decision (F1), not the AI's.
+- **Major:** enum values are validated in the service, not at the boundary (§5.2); the vendor-facing
+  `createRetrospective(teamId, title)` has no JavaDoc tags (§6.1, Major because it's a business
+  rule); layer-first packages (§1.1, grandfathered).
+
+**Then check it**
+- **Three quotes looked up** in `stackcraft-coding-standards.md` (§2.1, §1.4, §5.2, plus §6.1):
+  all verbatim, none made up. One surprise: the document **contradicts itself** on §1.1. The
+  heading says "(CRITICAL)", the severity line says "Major".
+- **Two findings opened at the named line** (`FeedbackItem.java:79`, `ServiceValidation.java:49`):
+  the violation is really there.
+- **§1.1 found?** Yes, as Major and grandfathered. It's tricky because the vendor test imports
+  `…entity`/`…service`/`…exception`, so going feature-first would break a file we may never edit.
+- **False positive from our own tooling:** the method-length script reported a 49-line test. A
+  `{` inside a JSON string literal threw off the brace counting, and the method is really 4 lines.
+  A mechanical check needs checking too.
+
+**Verdict:** worked. Grounding changed the audit: no generic "use Lombok"- or "add Swagger"-style
+findings, every finding points to a section, and the ambiguous ones (C2, C3) are flagged instead
+of "fixed".
+
+### Step 3: fix the Critical findings, with the tests watching
+
+**Prompt**
+
+```
+Fix the Critical findings in audit/audit-findings.md one at a time. For each: make the smallest
+change in src/main, run `mvn test` yourself, and stop if anything goes red. Existing tests are
+never edited: if a fix would need that, don't fix it, flag it. Findings marked ⚖️ need a team
+decision: don't fix those, write down why. After each fix, update its entry in the audit (what was
+wrong, which section) and commit it on its own. Finish with `mvn verify` and `git diff -- src/test`.
+```
+
+**Result**
+- **Fix 1, C1 §2.1** (`684b6e8`): the `FeedbackItem` guard message is now
+  `FeedbackItem new: type ACTION_ITEM must be created as an ActionItem`. `mvn test`: 89/89.
+- **Fix 2, M2 §6.1** (`d2a6648`): full `@param`/`@return`/`@throws` on
+  `createRetrospective(teamId, title)`. It's Major, not Critical, but it's a business-rule method
+  and a three-line change. `mvn test`: 89/89.
+- **C2 §1.4, not fixed** ⚖️: field injection lives only in test classes. Converting them means
+  editing existing tests (forbidden in this step), and the vendor test can never comply. Question
+  for the team: does §1.4 apply to `src/test`?
+- **C3 §4.1, not fixed** ⚖️: changing "not a member" from 400 to 409 changes decision F1, matrix row
+  30 and existing tests. That's the team's call, not ours.
+- `mvn verify`: **89/89 green**, coverage 93.7% lines / 86.0% branches, BUILD SUCCESS.
+  `git diff dbbe1e2 -- src/test` is **empty**: no test was touched.
+- **Test for fix 1:** none yet, on purpose. Block 3 has us write it with the other pair's
+  `stackcraft-tests` skill in the swap.
+
+**Verdict:** worked, but only 1 of the 3 Criticals could be fixed inside the rules of this step.
+The other two are real disagreements (a rule vs. a vendor file, and a rule the standard doesn't
+define), and an agent "fixing" them would just be picking a side for us.
+
+### Step 4: draft the `stackcraft-audit` skill
+
+**Prompt**
+
+```
+Turn what worked in our step 2 audit into a skill: .claude/skills/stackcraft-audit/SKILL.md,
+under 40 lines, in the name/description/instructions format from block3.md. It must make the AI
+read the standards through the ai-track-standards MCP server (never from memory), go section by
+section, and write audit/audit-findings.md in the same structure as ours. Put the mechanical
+checks (class length, @Autowired fields, catch blocks, query concatenation, secrets in config)
+in a small script next to it, and tell the AI to open every hit before reporting it.
+Spend most of the care on the description: it's what decides whether the skill gets loaded.
+```
+
+**Result**
+- `.claude/skills/stackcraft-audit/SKILL.md` (38 lines) and `checks.sh`.
+- `.claude/` is in this machine's global gitignore, so the skill is added with `git add -f`.
+- **The script caught a mistake in our own audit.** C2 listed 6 test classes with field
+  injection, but 5 of them are `@Autowired` **constructors**. The audit had trusted a bare
+  `grep "@Autowired"` without opening the lines. The script looks at the line after the annotation
+  and found only `ControllerContractTest:21` and the vendor test. C2 is corrected in
+  `audit/audit-findings.md`, with a note.
+- **What we edited by hand:** the description. It now names the triggers ("audit", "check
+  compliance", "violations of our coding standards", "before a fix round") instead of just "audits
+  code". It also says what the output is, so the AI can tell this skill apart from
+  `stackcraft-tests`.
+
+**Verdict:** worked, and it was humbling. Writing the mechanical check down as a script proved
+one of our own "checked" findings wrong. Exactly the habit the skill now forces ("open every hit
+before you report it").
+
 ## Pair BC (`block3-review`)
 
 ### Step 2: the review, with proof
