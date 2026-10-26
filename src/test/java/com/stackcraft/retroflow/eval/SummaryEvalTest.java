@@ -53,7 +53,7 @@ class SummaryEvalTest {
     SummaryEvalTest(TeamService teamService, RetrospectiveService retrospectiveService, FeedbackItemService feedbackItemService,
                 CountingSummaryModel tokens, @Value("${retroflow.summary.model}") String model,
                 @Value("${retroflow.summary.temperature}") double temperature,
-                @Value("${eval.judge.model:gpt-4.1}") String judgeModel, @Value("${OPENAI_API_KEY:}") String apiKey) {
+                @Value("${eval.judge.model:gpt-4.1-mini}") String judgeModel, @Value("${OPENAI_API_KEY:}") String apiKey) {
         this.teamService = teamService;
         this.retrospectiveService = retrospectiveService;
         this.feedbackItemService = feedbackItemService;

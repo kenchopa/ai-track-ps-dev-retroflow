@@ -1025,3 +1025,67 @@ reviews are always late"). Every summary sends it to OpenAI in the US.
 
 **Verdict:** worked, and the real API found a bug that the mocks couldn't. Mock the provider for
 the failure *logic*, but run the real HTTP client against a real (slow) socket at least once.
+
+## Challenge 3: prove it works
+
+**Prompt**
+
+```
+Build an eval for the summary endpoint. At least 10 cases in a file in the repo, each with input
+and a clear expectation, of which at least 2 tricky (empty, prompt injection, very long item,
+non-English). One command runs it and prints a score and the cost in tokens and euros. Code checks
+whatever code can check (valid answer, required mentions, forbidden words, number of points); only
+faithfulness goes to a model judge, with a written rubric. Run it through the real service and
+validator, never in the normal build or CI. Then: run it twice unchanged (noise), change exactly one
+thing, compare, and make one change that brings the cost down. Check the judge too.
+```
+
+**Result**
+- `eval/summary-cases.json`: 13 cases, 7 tricky. `./mvnw test -Peval` runs
+  `SummaryEvalTest` (tag `eval`, excluded from the normal build).
+- Code checks are in `EvalChecks`. The judge (`Judge`, rubric in `eval/judge-prompt.txt`) only
+  judges faithfulness. The score and cost are printed, and the full results are in
+  `eval/results/<label>.json`.
+- `JudgeEvalTest`: 8 planted summaries with a known verdict, to check the judge.
+- Every number is in `eval/README.md`.
+
+| Run | One change | Score | Cost |
+|---|---|---|---|
+| baseline × 3 | none | 94.0 / 96.0 / 94.0 | $0.0183 = EUR 0.0163 |
+| prompt v2 × 2 | the prompt: "never name people" with an example, "same topic = one point" | **98.0 / 98.0** | $0.0185 |
+| mini judge × 2 | the judge model gpt-4.1 → gpt-4.1-mini | 98.0 / 96.0 | **$0.0069 = EUR 0.0061 (−63%)** |
+
+**Then check it**
+- **Noise:** ±2 points between unchanged runs, because the duplicates case flips by itself. The
+  prompt change (+3 to +4) only counts because it held on a second run *and* fixed the same two
+  cases both times.
+- **Two failed cases, read by hand:**
+  - *Names:* the summary copied "Bob's code reviews are always late". The model was wrong: our
+    prompt said "Don't name people". The expectation was right, because it's personal data.
+  - *Duplicates:* one run merged six "CI is slow" items into one point, the next kept four. The
+    model was inconsistent and the instruction too weak. The expectation (≤ 2) is ours and it's fair.
+- **Do we trust the judge?** On the planted cases, both judges got 8/8, twice. On real cases:
+  - **gpt-4.1** rejected "Standups were effective" for "Standups were great". That's a fair
+    rephrase, and it had accepted the same kind of rephrase in isolation. **We don't trust that one.**
+  - **gpt-4.1-mini** failed the injection case for leaving out an item, which goes against its own
+    rubric. But it also caught an invented "causing disruption" that gpt-4.1 let through.
+  - So the judge is a second source of noise. We always read its reason.
+- **Cost:** a normal summary costs $0.0004. A full eval run costs EUR 0.006 after the change, and
+  the judge was the expensive part, not the feature.
+
+**What went wrong**
+1. **The first eval run reported `Tests run: 0` and "BUILD SUCCESS".** Surefire only picks up
+   classes named `*Test`, so `SummaryEval` was never even a candidate. The tag exclusion we were proud
+   of had never been tested. We renamed it, and showed that `mvn verify` still runs 130 tests and
+   `-Peval` runs 1. A green build with zero tests is the worst kind of green.
+2. **We almost made the cheap judge the default without checking it.** `JudgeEvalTest` exists
+   because of that.
+
+**Level up:** `.github/workflows/eval.yml` runs the judge check and then the eval, **by hand only**
+(`workflow_dispatch`), with the `OPENAI_API_KEY` repository secret, and uploads the results.
+Every push only runs the free, deterministic `mvn verify`. Run the eval before a release and after
+any change to the prompt, the model or the summary code. The secret still has to be added to the
+repo by its owner.
+
+**Verdict:** worked. The eval found two real prompt bugs in its first run. The more lasting lesson
+is that the judge and the tests around it need checking just as much as the feature.

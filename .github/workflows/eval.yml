@@ -1,0 +1,53 @@
+name: AI summary eval
+
+# Costs money (about EUR 0.006 per run) and is noisy by nature (about ±2 points), so it never
+# runs on push or pull request. Run it by hand before a release, and whenever the prompt, the model
+# or the summary code changes. Needs the repository secret OPENAI_API_KEY (Settings → Secrets).
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Name of this run, used for eval/results/<label>.json"
+        required: true
+        default: "ci"
+      model:
+        description: "Summary model"
+        required: false
+        default: "gpt-4.1-mini"
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Check the judge, then run the eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LABEL: ${{ inputs.label }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          mvn -B -ntp test -Peval -Dtest=JudgeEvalTest -Dsurefire.failIfNoSpecifiedTests=false
+          mvn -B -ntp test -Peval -Dtest=SummaryEvalTest -Deval.label="$LABEL" -Dretroflow.summary.model="$MODEL"
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-results
+          path: eval/results/
+          retention-days: 30

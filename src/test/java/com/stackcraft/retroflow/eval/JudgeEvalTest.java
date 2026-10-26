@@ -35,7 +35,7 @@ class JudgeEvalTest {
         // Arrange
         String apiKey = System.getenv("OPENAI_API_KEY");
         assertThat(apiKey).as("OPENAI_API_KEY must be set to run the eval").isNotBlank();
-        String model = System.getProperty("eval.judge.model", "gpt-4.1");
+        String model = System.getProperty("eval.judge.model", "gpt-4.1-mini");
         JudgeCases planted = new ObjectMapper().readValue(Path.of("eval/judge-cases.json").toFile(), JudgeCases.class);
         Judge judge = new Judge(new ObjectMapper(), "https://api.openai.com/v1", model,
                 Files.readString(Path.of("eval/judge-prompt.txt")), apiKey);

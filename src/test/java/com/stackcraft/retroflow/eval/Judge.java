@@ -16,8 +16,8 @@ import java.util.List;
  * The one check code can't do: is every point backed by the feedback?
  * A model judges that, with the rubric in {@code eval/judge-prompt.txt}, at
  * temperature 0, and its reason is kept in the results so a human can
- * disagree with it. Default judge: gpt-4.1, a larger model than the one it
- * judges; {@link JudgeEvalTest} checks it on planted cases.
+ * disagree with it. Default judge: gpt-4.1-mini, chosen after it matched
+ * gpt-4.1 on the planted cases of {@link JudgeEvalTest} (see eval/README.md).
  */
 final class Judge {
 
