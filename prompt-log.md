@@ -215,3 +215,171 @@ instead, one bug at a time.
 **Verdict:** worked. The lesson: the mutants that matter weren't on the rules we worried about,
 they were on the "boring" update path nobody wrote a row for. Would we have spotted a missing
 `setPriority` in a code review? Probably not.
+
+---
+
+## Pair BD (`block2-web`)
+
+> Branched from `block2-service` instead of `block2`. The planned controllers for feedback and
+> action items need `FeedbackItemService` and `ActionItemService`, which Pair AC created. We work
+> one after the other on one machine, so this avoids mocking classes that don't exist yet.
+> BD only touches `controller/`, `dto/` and `exception/`, plus tests.
+
+### Step 1: plan before you act
+
+**Prompt**
+
+```
+Read the controllers, the dto and exception packages, retroflow-brief.md and decisions.md
+(G1, G3, G5 and the endpoint contract). Do NOT change any file yet. Plan in three parts, with
+the file and class for every change:
+1. Every endpoint that exists today: what it returns (status code and body) on success, invalid
+   input, unknown id and a business-rule violation. Compare that with the brief and decisions.md.
+2. Contract tests for every endpoint in the decisions.md contract: success, 400, 404 and 409,
+   working with JSON in and JSON out, with the services mocked.
+3. Restructuring: DTOs instead of entities, one @RestControllerAdvice with one error format,
+   validation on the request objects, no logic in controllers.
+Stay out of services, entities and repositories (Pair AC). Where the brief doesn't answer
+something, flag it. Don't decide it.
+```
+
+**Plan (agent output, summarised)**
+
+*Part 1: what exists.* Two controllers with 7 endpoints. They match the contract:
+- `TeamController`: `POST /api/teams` returns 201 + `Location`, and `GET /api/teams` and
+  `GET /api/teams/{id}` return 200.
+- `RetrospectiveController`: create returns 201, list and get return 200, and close returns 200.
+- They already use request and response records. One `GlobalExceptionHandler` maps:
+  - 404 → `NotFoundException`
+  - 400 → `InvalidInputException`, bean validation, unreadable JSON and type mismatches
+  - 409 → `RetroflowException`
+  - Spring's own 404/405 keep their status
+  - everything else → 500 without internals
+
+*Gaps against decisions.md:*
+- (a) None of the 8 feedback and action item endpoints exist yet.
+- (b) The contract has `PUT /api/feedback-items/{id}` for content, but decision F3 also lets an
+  action item's **priority** change. There is no endpoint for that. **Flagged.** Proposal:
+  `PUT /api/action-items/{id}` with `{content, priority}`. Needs a team decision.
+- (c) A validation error on an *update* body would say `FeedbackItem new: …`. "new" is wrong
+  there: the identifier should be the id from the path.
+- (d) Two requests creating the same team name at the same moment pass the service check. The
+  database's unique constraint then throws `DataIntegrityViolationException`, which becomes a
+  **500** today. It should be a 409, without database details (StackCraft 4.2).
+
+*Part 2: contract tests.* `@WebMvcTest` with all four services as `@MockBean`. One class per
+controller: `TeamControllerTest`, `RetrospectiveControllerTest`, `FeedbackItemControllerTest` and
+`ActionItemControllerTest`. The latter two target controllers that don't exist yet, so they'll
+fail at first.
+
+*Part 3: restructure.* New `FeedbackItemController` and `ActionItemController`. New request
+records `CreateFeedbackItemRequest`, `CreateActionItemRequest`, `UpdateFeedbackItemRequest`
+and `UpdateActionItemRequest`, and one `FeedbackItemResponse` (priority and completed only for
+action items). Handler fixes for (c) and (d).
+
+*Business-rule status code:* the agent picked **409**, citing StackCraft 4.1, and that is
+already decision G1. The brief itself only says "appropriate", so we confirmed it in
+`decisions.md`.
+
+**Verdict:** worked. Nothing in services, entities or repositories is touched. Gap (b) was
+flagged instead of decided, and we decided it ourselves (the extra `PUT /api/action-items/{id}`,
+added to the contract).
+
+### Step 2: write the contract tests first
+
+**Prompt**
+
+```
+Following the plan, write a web-layer test class per controller in src/test/.../controller:
+Team, Retrospective, FeedbackItem and ActionItem (the last two per the decisions.md contract).
+Test only the web layer: @WebMvcTest with every service mocked. Send JSON in and assert on JSON
+out (jsonPath), never on Java classes, so the tests survive the restructuring. Check the status
+AND the body, including the error format {error, status, timestamp}. Cover success, 400, 404
+and 409 where they apply. Run them and report which fail and why. Don't fix anything yet.
+```
+
+**Result:** 42 contract tests in 4 classes, sharing a `ControllerContractTest` base and `WebFixtures`.
+- `TeamControllerTest` 9, `RetrospectiveControllerTest` 10, `FeedbackItemControllerTest` 11, `ActionItemControllerTest` 12.
+- **24 fail, all for real reasons:**
+  - 22 tests: the feedback and action item endpoints don't exist yet, so they get a 404 from
+    Spring ("Request -: Not Found").
+  - `createTeam_whenDatabaseRejectsDuplicate_returns409WithoutDatabaseDetails`: a
+    `DataIntegrityViolationException` becomes a **500**. This is gap (d) from the plan. Code
+    bug, not a test bug.
+  - `getFeedbackItems_forUnknownRetro_returns404`. See below.
+- **A test that could never fail.** The first version of `getFeedbackItems_forUnknownRetro_returns404`
+  was **green**, even though the endpoint doesn't exist. It only checked for a 404, and an
+  unknown route is also a 404. We made it assert the error message as well
+  (`Retrospective 999: not found`), and now it fails for the right reason. The same trap exists
+  for `reopenRetrospective_hasNoEndpoint_returns404`, but there a route-level 404 is exactly
+  what we want (test-matrix.md row 5).
+
+**Verdict:** needed one fix. Checking the status alone isn't enough for "not found" tests: always
+assert the body too.
+
+### Step 3: restructure while the tests watch
+
+**Prompt**
+
+```
+Follow the plan to make the failing contract tests green, in this order:
+(1) request and response records, (2) FeedbackItemController, (3) ActionItemController,
+(4) GlobalExceptionHandler fixes. Run the controller tests after every part, then stop and list
+what changed. Only touch controller/, dto/ and exception/. Services, entities and repositories
+belong to Pair AC. The tests work with JSON, so they shouldn't need to change: if you think one
+must change, ask first. Don't remove anything without asking.
+```
+
+**Result**
+- New: `CreateFeedbackItemRequest`, `CreateActionItemRequest`, `UpdateFeedbackItemRequest`,
+  `UpdateActionItemRequest`, `FeedbackItemResponse` (`priority`/`completed` only for action
+  items), `FeedbackItemController` (4 endpoints) and `ActionItemController` (5 endpoints).
+- `GlobalExceptionHandler`:
+  - Validation errors on an update body now name the item from the path (`FeedbackItem 100: …`)
+    instead of `… new: …`.
+  - `DataIntegrityViolationException` → 409 `Request -: conflicts with existing data`, logged,
+    and no database text reaches the client.
+- **All 85 tests green**: 42 contract tests, 40 service tests and the 3 vendor tests.
+- `git status`: no test file changed. Nothing in `service/`, `entity/` or `repository/` changed.
+- "Show me every place where an entity is still returned or accepted by a controller": **none**.
+  `TeamController` and `RetrospectiveController` still use the entity as a local variable, only
+  to read the new id for the `Location` header. We accepted that.
+- One error shape everywhere, including bean validation, unreadable JSON, type mismatches,
+  Spring's own 404/405 and the 500 fallback.
+
+**Verdict:** worked. The type and priority stay `String` in the requests on purpose: an enum
+would make Jackson reject `"GREAT"` with a generic "malformed JSON" message, while the service
+returns "must be one of WENT_WELL, NEEDS_IMPROVEMENT".
+
+### Step 4: lock it in with an architecture test
+
+**Prompt**
+
+```
+Add ArchUnit as a test dependency. First check on Maven Central that the artifact and the exact
+version exist, and tell me what you checked. Then write one architecture test class with these
+rules: controllers don't use repositories; controller methods don't return or accept entities
+(also not inside a List); services don't depend on controllers or DTOs; no field injection.
+Prove each rule can fail: break it on purpose, run the test, show the failure, and put the code
+back. Afterwards git status must show no change in src/main.
+```
+
+**Result**
+- `com.tngtech.archunit:archunit-junit5:1.5.1`, test scope. It is the latest release in
+  maven-metadata.xml, and the `.pom` returns HTTP 200 on repo1.maven.org.
+- `ArchitectureTest` has 4 rules, all green on the current code. The "no entities" rule uses
+  `getAllInvolvedRawTypes()`, so `List<Team>` is caught too. A plain `notHaveRawReturnType`
+  would have missed it.
+- Proof. Each sabotage broke exactly its own rule and nothing else, and the code was restored
+  with `git checkout`:
+
+  | Sabotage | Rule violated |
+  |---|---|
+  | `TeamController` references `TeamRepository` | `controllersDoNotUseRepositories` |
+  | `public List<Team> sabotage()` in `TeamController` | `controllersDoNotExposeEntities` ("exposes entity Team") |
+  | `TeamService` references `TeamResponse` | `servicesDoNotDependOnWebLayer` |
+  | `@Autowired` field in `TeamController` | `noFieldInjection` |
+
+- `git status src/main` was empty afterwards.
+
+**Verdict:** worked. We checked the `pom.xml` dependency ourselves too.

@@ -10,7 +10,7 @@ Status: **proposal, drafted with AI in Block 1. Each decision still needs a ✅ 
 
 | #  | Decision | Why |
 |----|----------|-----|
-| G1 | A business rule violation returns **409 Conflict**. Validation failures return **400**, unknown ids return **404**. | StackCraft standard 4.1. The brief only says "appropriate". |
+| G1 | A business rule violation returns **409 Conflict**. Validation failures return **400**, unknown ids return **404**. | StackCraft standard 4.1. The brief only says "appropriate". Confirmed by the team in Block 2 (BD step 1). |
 | G2 | Business rules are enforced in the **service layer** and throw `RetroflowException` (or a subclass). The controller only validates the shape of the input. | Brief, "Definition of done". Standard 5.2. |
 | G3 | Every error body is `{"error": "...", "status": 409, "timestamp": "..."}`, and every message is `[EntityType] [identifier]: [reason]`. A new resource that has no id yet uses `new` as its identifier (`Team new: members must not be empty`). An error that belongs to no entity uses `Request -:`. | Standards 2.1 and 2.2. The monitoring parses these messages. |
 | G4 | We keep the starter's layer-first packages (`entity`, `service`, `controller`, ...). | The vendor tests import `...entity`, `...service` and `...exception`. Standard 1.1 grandfathers existing projects. The Block 3 audit will flag this. |
@@ -91,6 +91,7 @@ Block 1 builds the first two groups (service bodies come in Block 2). The rest i
 | POST | `/api/retrospectives/{id}/action-items` | 201 | 400, 404, 409 (closed) |
 | GET | `/api/retrospectives/{id}/feedback-items` | 200 | 404 |
 | PUT | `/api/feedback-items/{id}` | 200 | 400, 404, 409 (closed) |
+| PUT | `/api/action-items/{id}` (content + priority, F3, added in Block 2) | 200 | 400, 404, 409 (closed) |
 | DELETE | `/api/feedback-items/{id}` | 204 | 404, 409 (closed) |
 | PUT | `/api/action-items/{id}/complete` | 200 | 404, 409 (A1) |
 | PUT | `/api/action-items/{id}/uncomplete` | 200 (no-op) | 404, 409 (A2) |

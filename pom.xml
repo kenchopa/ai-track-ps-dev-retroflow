@@ -24,6 +24,7 @@
         <jacoco.branch.minimum>0.70</jacoco.branch.minimum>
         <pitest.version>1.30.1</pitest.version>
         <pitest.junit5.version>1.2.3</pitest.junit5.version>
+        <archunit.version>1.5.1</archunit.version>
     </properties>
 
     <dependencies>
@@ -51,6 +52,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
